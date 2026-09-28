@@ -100,6 +100,8 @@ pybind11 扩展完成，不使用 ctypes。公共工具只负责构建，不推�
 - [`03_str`](03_str/readme.md)：字符串转换、按值 SBString ABI 与内存释放。
 - [`04_bytes_and_holder`](04_bytes_and_holder/readme.md)：通用 Ref、地址句柄与 Go 生命周期，以字节切片为例。
 - [`05_slice`](05_slice/readme.md)：值元素与 Go 对象元素的 slice，保持 Go 的共享与 append 语义。
+- [`06_named_type`](06_named_type/readme.md)：命名值类型、命名 slice 与 struct，ABI 由底层类型决定。
+- 后续：数组、error、指针与可空值、callback 与并发等。
 
 编号代表研究顺序。后续案例如暴露旧规则的问题，应先修正文档和黄金样例，再实现
 生成逻辑。当前公共构建约定可以随真实案例需要调整，不预先引入复杂的配置机制。
