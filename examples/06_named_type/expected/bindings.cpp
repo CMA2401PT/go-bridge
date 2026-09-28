@@ -140,22 +140,15 @@ public:
     virtual size_t size() const = 0;
 };
 
-uintptr_t new_slice_int(const py::iterable& values) {
-    std::vector<intptr_t> data;
-    for (py::handle item : values) data.push_back(go_int(item));
-    return SBNewSliceInt(data.data(), data.size());
-}
+// Operations shared by every slice whose handle has the []int layout. Self
+// is the Python class that reslice and clone return, so a named slice keeps
+// its name, as Go's s[i:j] and slices.Clone do.
+template <class Self>
+class IntSlice : public Slice {
+protected:
+    using Slice::Slice;
 
-// []int: elements are Python ints copied to and from Go by value.
-class SliceInt : public Slice {
 public:
-    explicit SliceInt(uintptr_t id) : Slice(id) {}
-    SliceInt(SliceInt&&) noexcept = default;
-
-    static SliceInt from_values(const py::iterable& values) {
-        return SliceInt(new_slice_int(values));
-    }
-
     size_t size() const override { return SBSliceIntLen(handle()); }
     intptr_t get(py::ssize_t index) const {
         intptr_t value = 0;
@@ -170,11 +163,11 @@ public:
             throw py::index_error("slice index out of range");
         }
     }
-    SliceInt reslice(const py::slice& range) const {
+    Self reslice(const py::slice& range) const {
         const auto [low, high] = bounds(range);
-        return SliceInt(SBSliceIntSlice(handle(), low, high));
+        return Self(SBSliceIntSlice(handle(), low, high));
     }
-    SliceInt clone() const { return SliceInt(SBSliceIntClone(handle())); }
+    Self clone() const { return Self(SBSliceIntClone(handle())); }
     py::list copy_to_py_list() const {
         std::vector<intptr_t> data(size());
         if (SBCopySliceInt(handle(), data.data(), data.size()) != 0) {
@@ -186,26 +179,32 @@ public:
     }
 };
 
-// MyNamedNonStructSliceInt: a named []int. Its handle has the []int layout, so
-// every SliceInt export applies to it. Reslice and clone keep the named type,
-// as Go's s[i:j] and slices.Clone do.
-class MyNamedNonStructSliceInt : public SliceInt {
+// []int: elements are Python ints copied to and from Go by value.
+class SliceInt : public IntSlice<SliceInt> {
 public:
-    explicit MyNamedNonStructSliceInt(uintptr_t id) : SliceInt(id) {}
+    explicit SliceInt(uintptr_t id) : IntSlice(id) {}
+    SliceInt(SliceInt&&) noexcept = default;
+
+    static SliceInt from_values(const py::iterable& values) {
+        std::vector<intptr_t> data;
+        for (py::handle item : values) data.push_back(go_int(item));
+        return SliceInt(SBNewSliceInt(data.data(), data.size()));
+    }
+};
+
+// MyNamedNonStructSliceInt: a named []int. It shares SliceInt's layout and
+// exports but is a distinct type: it converts to and from SliceInt only
+// explicitly, and both conversions share the backing array.
+class MyNamedNonStructSliceInt : public IntSlice<MyNamedNonStructSliceInt> {
+public:
+    explicit MyNamedNonStructSliceInt(uintptr_t id) : IntSlice(id) {}
     MyNamedNonStructSliceInt(MyNamedNonStructSliceInt&&) noexcept = default;
 
-    static MyNamedNonStructSliceInt from_values(const py::iterable& values) {
-        return MyNamedNonStructSliceInt(new_slice_int(values));
+    // Go's MyNamedNonStructSliceInt(s).
+    static MyNamedNonStructSliceInt from_slice(const SliceInt& values) {
+        return MyNamedNonStructSliceInt(SBNewMyNamedNonStructSliceInt(values.handle()));
     }
-
-    MyNamedNonStructSliceInt reslice(const py::slice& range) const {
-        const auto [low, high] = bounds(range);
-        return MyNamedNonStructSliceInt(SBSliceIntSlice(handle(), low, high));
-    }
-    MyNamedNonStructSliceInt clone() const {
-        return MyNamedNonStructSliceInt(SBSliceIntClone(handle()));
-    }
-    // Go's []int(si): a new SliceInt that shares the backing array.
+    // Go's []int(si).
     SliceInt unname() const { return SliceInt(SBMyNamedNonStructSliceIntUnname(handle())); }
     py::str echo_non_struct_slice_int() const {
         return py_string(SBMyNamedNonStructSliceIntEchoNonStructSliceInt(handle()));
@@ -335,9 +334,8 @@ py::str fn_echo_non_struct_int(py::handle i) {
     return py_string(SBFnEchoNonStructInt(my_named_non_struct_int_value(i)));
 }
 
-// Go assigns []int to a MyNamedNonStructSliceInt parameter, so any SliceInt,
-// named or not, is accepted.
-py::str fn_echo_non_struct_slice_int(const SliceInt& si) {
+// Only the named slice: a SliceInt needs an explicit conversion first.
+py::str fn_echo_non_struct_slice_int(const MyNamedNonStructSliceInt& si) {
     return py_string(SBFnEchoNonStructSliceInt(si.handle()));
 }
 
@@ -368,13 +366,15 @@ PYBIND11_MODULE(_native, module) {
         .def("__setitem__", &SliceInt::set, py::arg("index"), py::arg("value"))
         .def("clone", &SliceInt::clone)
         .def("copy_to_py_list", &SliceInt::copy_to_py_list);
-    // A subclass's __getitem__ hides every inherited overload, so both are
-    // bound again with the named reslice.
-    py::class_<MyNamedNonStructSliceInt, SliceInt>(module, "MyNamedNonStructSliceInt")
-        .def(py::init(&MyNamedNonStructSliceInt::from_values), py::arg("values"))
-        .def("__getitem__", &SliceInt::get, py::arg("index"))
+    // Not a SliceInt subclass: Go's named and unnamed slices are distinct types.
+    py::class_<MyNamedNonStructSliceInt, Slice>(module, "MyNamedNonStructSliceInt")
+        .def(py::init(&MyNamedNonStructSliceInt::from_slice),
+             py::arg("values").noconvert().none(false))
+        .def("__getitem__", &MyNamedNonStructSliceInt::get, py::arg("index"))
         .def("__getitem__", &MyNamedNonStructSliceInt::reslice, py::arg("index"))
+        .def("__setitem__", &MyNamedNonStructSliceInt::set, py::arg("index"), py::arg("value"))
         .def("clone", &MyNamedNonStructSliceInt::clone)
+        .def("copy_to_py_list", &MyNamedNonStructSliceInt::copy_to_py_list)
         .def("unname", &MyNamedNonStructSliceInt::unname)
         .def("echo_non_struct_slice_int", &MyNamedNonStructSliceInt::echo_non_struct_slice_int);
 

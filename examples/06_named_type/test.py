@@ -78,21 +78,37 @@ class Holders(unittest.TestCase):
 
 
 class NamedSliceTests(Holders):
-    def test_is_a_slice_int(self) -> None:
-        values = bridge.MyNamedNonStructSliceInt([1, 2, 3])
-        self.assertIsInstance(values, bridge.SliceInt)
+    def test_is_a_distinct_slice(self) -> None:
+        values = bridge.MyNamedNonStructSliceInt(bridge.SliceInt([1, 2, 3]))
         self.assertIsInstance(values, bridge.Slice)
+        self.assertNotIsInstance(values, bridge.SliceInt)
         self.assertEqual(len(values), 3)
         self.assertEqual(values.copy_to_py_list(), [1, 2, 3])
         values[-1] = 30
         self.assertEqual(values[2], 30)
-        self.assertEqual(bridge.MyNamedNonStructSliceInt(range(2)).copy_to_py_list(), [0, 1])
         with self.assertRaises(TypeError):
             for _ in values:  # type: ignore[misc]
                 pass
 
+    def test_conversions_share_the_array(self) -> None:
+        plain = bridge.SliceInt([1, 2])
+        values = bridge.MyNamedNonStructSliceInt(plain)  # Go's MyNamed(s)
+        values[0] = 10
+        self.assertEqual(plain[0], 10)
+        back = values.unname()  # Go's []int(si)
+        self.assertIs(type(back), bridge.SliceInt)
+        back[1] = 20
+        self.assertEqual(values[1], 20)
+        del plain, values
+        _native._collect_go()
+        self.assertEqual(back.copy_to_py_list(), [10, 20])
+        # Construction is a conversion, not a copy from Python values.
+        for bad in [[1], range(2), None, bridge.MyNamedNonStructSliceInt(bridge.SliceInt([]))]:
+            with self.assertRaises(TypeError):
+                bridge.MyNamedNonStructSliceInt(bad)  # type: ignore[arg-type]
+
     def test_operations_keep_the_name(self) -> None:
-        values = bridge.MyNamedNonStructSliceInt([1, 2, 3])
+        values = bridge.MyNamedNonStructSliceInt(bridge.SliceInt([1, 2, 3]))
         tail = values[1:]
         self.assertIs(type(tail), bridge.MyNamedNonStructSliceInt)
         self.assertIs(type(values.clone()), bridge.MyNamedNonStructSliceInt)
@@ -101,25 +117,13 @@ class NamedSliceTests(Holders):
         with self.assertRaises(ValueError):
             values[::2]
 
-    def test_unname_shares_array(self) -> None:
-        values = bridge.MyNamedNonStructSliceInt([1, 2])
-        plain = values.unname()
-        self.assertIs(type(plain), bridge.SliceInt)
-        plain[0] = 10
-        self.assertEqual(values[0], 10)
-        del values
-        _native._collect_go()
-        self.assertEqual(plain.copy_to_py_list(), [10, 2])
-
     def test_methods_and_functions(self) -> None:
-        values = bridge.MyNamedNonStructSliceInt([1, -2])
+        values = bridge.MyNamedNonStructSliceInt(bridge.SliceInt([1, -2]))
         self.assertEqual(values.echo_non_struct_slice_int(), "my non struct slice int: [1 -2]")
         self.assertEqual(bridge.fn_echo_non_struct_slice_int(values), "my non struct slice int: [1 -2]")
-        # Go assigns an unnamed []int to the named parameter.
-        self.assertEqual(
-            bridge.fn_echo_non_struct_slice_int(bridge.SliceInt([])), "my non struct slice int: []")
         self.assertFalse(hasattr(bridge.SliceInt([]), "echo_non_struct_slice_int"))
-        for bad in [[1], None]:
+        # Stricter than Go, which assigns []int to the named type implicitly.
+        for bad in [bridge.SliceInt([]), [1], None]:
             with self.assertRaises(TypeError):
                 bridge.fn_echo_non_struct_slice_int(bad)  # type: ignore[arg-type]
 
@@ -205,14 +209,18 @@ class StructTests(Holders):
         numbers = value.ref_member_value
         numbers[0] = 30
         self.assertEqual(value.ref_member_value[0], 30)
-        replacement = bridge.MyNamedNonStructSliceInt([9])
-        value.ref_member_value = replacement  # Any SliceInt, as in Go assignment.
+        replacement = bridge.SliceInt([9])
+        value.ref_member_value = replacement
         replacement[0] = 90
         self.assertIs(type(value.ref_member_value), bridge.SliceInt)
         self.assertEqual(value.echo_ptr(), echo("{{2} 1 [90] 5 {6}}"))
         self.assertEqual(numbers.copy_to_py_list(), [30, 4])
-        with self.assertRaises(TypeError):
-            value.ref_member_value = [1]  # type: ignore[assignment]
+        named = bridge.MyNamedNonStructSliceInt(bridge.SliceInt([1]))
+        for bad in [[1], named]:  # A named slice needs unname() first.
+            with self.assertRaises(TypeError):
+                value.ref_member_value = bad  # type: ignore[assignment]
+        value.ref_member_value = named.unname()
+        self.assertEqual(value.ref_member_value.copy_to_py_list(), [1])
 
     def test_copy_is_shallow(self) -> None:
         value = full_struct()

@@ -120,9 +120,17 @@ func SBFnEchoNonStructInt(i C.intptr_t) C.SBString {
 }
 
 // ---------------------------------------------------------------------------
-// MyNamedNonStructSliceInt: its handle has the []int layout, so construction,
-// len, indexing, reslice, clone and copy reuse the SliceInt exports. Get
-// converts to the named type only where Go needs the name.
+// MyNamedNonStructSliceInt: its handle has the []int layout, so len,
+// indexing, reslice, clone and copy reuse the SliceInt exports. Get converts
+// to the named type only where Go needs the name.
+
+// SBNewMyNamedNonStructSliceInt is Go's MyNamedNonStructSliceInt(s): a new
+// handle that shares the backing array.
+//
+//export SBNewMyNamedNonStructSliceInt
+func SBNewMyNamedNonStructSliceInt(id C.uintptr_t) C.uintptr_t {
+	return Pin(api.MyNamedNonStructSliceInt(Get[[]int](id)))
+}
 
 //export SBMyNamedNonStructSliceIntEchoNonStructSliceInt
 func SBMyNamedNonStructSliceIntEchoNonStructSliceInt(id C.uintptr_t) C.SBString {
@@ -137,9 +145,6 @@ func SBMyNamedNonStructSliceIntUnname(id C.uintptr_t) C.uintptr_t {
 	return Pin([]int(Get[api.MyNamedNonStructSliceInt](id)))
 }
 
-// Go lets []int and MyNamedNonStructSliceInt be assigned to each other, so
-// si may be the handle of either wrapper.
-//
 //export SBFnEchoNonStructSliceInt
 func SBFnEchoNonStructSliceInt(si C.uintptr_t) C.SBString {
 	return cString(api.FnEchoNonStructSliceInt(Get[api.MyNamedNonStructSliceInt](si)))

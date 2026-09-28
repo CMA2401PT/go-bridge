@@ -24,9 +24,9 @@ n = bridge.MyNamedNonStructInt(5)       # int 的子类
 assert n.echo_non_struct_int() == "my non struct int: 5"
 bridge.fn_echo_non_struct_int(n)        # 5 本身会被拒绝
 
-s = bridge.MyNamedNonStructSliceInt([1, 2])   # SliceInt 的子类
+s = bridge.MyNamedNonStructSliceInt(bridge.SliceInt([1, 2]))  # Go 的 MyNamed(s)
 assert type(s[1:]) is bridge.MyNamedNonStructSliceInt
-bridge.fn_echo_non_struct_slice_int(bridge.SliceInt([3]))  # Go 允许的赋值
+bridge.fn_echo_non_struct_slice_int(s)  # SliceInt 需先显式转换
 
 v = bridge.MyNamedStruct(
     basic_member_value=1,
@@ -67,25 +67,31 @@ Go int 参数使用同样的范围和类型检查，默认值 0 是 Go 零值；
 `MyNamedNonStructInt`。需要保留名字时要显式构造。逐个重写算术运算符可以
 消除差异，但会显著增加生成代码，暂不采用。
 
-## 命名 slice：SliceInt 子类
+## 命名 slice：独立的 Slice 类
 
 `MyNamedNonStructSliceInt` 与 `[]int` 底层类型相同，内存布局一致。因此它复用
-`SliceInt` 的全部导出函数（New / Len / At / Set / Slice / Clone / Copy），只新增
-自身的方法和 `unname`：
+`SliceInt` 的导出函数（Len / At / Set / Slice / Clone / Copy），C++ 中两者共用一个
+模板实现；但它在 Python 中是 `Slice[int]` 的独立子类，**不继承 `SliceInt`**：
 
 | Go | ABI | Python |
 | --- | --- | --- |
-| `si.EchoNonStructSliceInt()` | `Get[MyNamedNonStructSliceInt](id)` 后调用 | 实例方法 |
+| `MyNamedNonStructSliceInt(s)` | `SBNewMyNamedNonStructSliceInt`，新句柄共享底层数组 | 构造函数，只接受 `SliceInt` |
 | `[]int(si)` | `SBMyNamedNonStructSliceIntUnname`，新句柄共享底层数组 | `unname() -> SliceInt` |
+| `si.EchoNonStructSliceInt()` | `Get[MyNamedNonStructSliceInt](id)` 后调用 | 实例方法 |
 | `si[i:j]`、`slices.Clone(si)` | 复用 SliceInt 导出，C++ 包装为命名类 | 结果仍为命名类型 |
+
+构造函数就是 Go 的类型转换，不从 Python iterable 复制；从 list 构造写成
+`MyNamedNonStructSliceInt(SliceInt([...]))`。两个方向的转换都共享底层数组，没有
+复制成本。
 
 `Get[T]` 的约定因此放宽为：读取类型与 Pin 时的类型必须**底层类型相同**，见
 `holder.go`。同一个 `[]int` 句柄可以按 `[]int` 或命名类型读取。
 
-Go 允许在 `[]int` 与 `MyNamedNonStructSliceInt` 之间直接赋值（二者之一是未命名
-类型）。所以 `fn_echo_non_struct_slice_int` 接受任意 `SliceInt`，`SliceInt` 字段
-也接受命名 slice；Python 的子类关系正好覆盖反方向。注意这与命名 int 不同：
-`int` 本身是命名类型，两个命名类型之间必须显式转换。
+命名 slice 与 `SliceInt` 互不接受，参数与字段都需要显式转换。这与命名 int 一致，
+也**比 Go 严格**：Go 允许在 `[]int` 与命名 slice 之间直接赋值（二者之一是未命名
+类型）。选择严格是因为继承无法正确表达这种关系：Go 的命名 slice 并不是 `[]int`
+的子类型，到了指针层面（07）`*[]int` 与 `*MyNamedNonStructSliceInt` 也不可互换；
+而显式转换共享数组，代价只是一次调用。总体规则见 [`../types.md`](../types.md)。
 
 ## struct：句柄持有 `*T`
 
@@ -157,8 +163,8 @@ Python 变量赋值只产生别名，对应 Go 中复制指针，而不是复制
 
 ## 验证
 
-Python 测试覆盖：命名 int 的 int 行为、极值、类型拒绝和方法；命名 slice 的
-继承、名字保持、`unname` 共享数组以及与未命名 slice 的互相赋值；struct 的零值
+Python 测试覆盖：命名 int 的 int 行为、极值、类型拒绝和方法；命名 slice 与
+SliceInt 互不继承、双向转换共享数组、名字保持、参数与字段拒绝未转换的 slice；struct 的零值
 构造、复制与共享规则、标量/命名/slice/struct 字段读写、嵌入与提升字段、视图在
 父对象释放后存活、别名、浅拷贝、两种接收者、Go int 回绕、参数拒绝和构造失败
 不泄漏句柄。每个 Ref 测试结束时检查 holder 数量回到基线。Go 测试覆盖命名
@@ -176,6 +182,6 @@ MYPYPATH=examples/.build/06_named_type/python mypy examples/06_named_type/test.p
 时生成 Python 内建类型的子类并按值传递；底层为 slice 时生成对应 `Slice[Elem]`
 类的子类并复用其导出；struct 生成持有 `*T` 的 Ref 子类。还需要知道方法集及
 每个方法的接收者是值还是指针、struct 字段顺序、导出性与嵌入关系（用于提升
-字段，以及同名字段的遮蔽规则），并用 Go 的可赋值规则决定参数接受哪些 Python
-类。未覆盖：其他底层类型（string、bool、float、map）、提升方法、嵌入指针、
+字段，以及同名字段的遮蔽规则），参数只接受恰好对应的 Python 类，
+命名类型与底层类型之间生成显式转换。未覆盖：其他底层类型（string、bool、float、map）、提升方法、嵌入指针、
 字段名冲突、未导出字段、指针字段、struct 元素的 slice 以及 iota 常量。
