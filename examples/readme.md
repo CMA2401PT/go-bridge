@@ -8,6 +8,7 @@
 ```text
 examples/
 ├── readme.md
+├── types.md                      # 类型映射总览
 ├── build.py                      # 共用构建入口
 ├── .build/                       # 构建产物，不作为黄金代码
 │   └── 01_basic/
@@ -91,6 +92,8 @@ pybind11 扩展完成，不使用 ctypes。公共工具只负责构建，不推�
 
 ## 验证范围与研究顺序
 
+已确认的类型映射规则汇总在 [`types.md`](types.md)，各案例 readme 记录细节与推导。
+
 案例应能从干净环境构建并通过 Python 测试，公开 API 与 `.pyi` 保持一致。
 涉及资源管理和失败路径时，应验证释放、重复调用和异常行为。`01_basic` 作为
 最小目录模板只保留三个正常调用，尚不代表完整的标量边界测试规范。
@@ -101,7 +104,10 @@ pybind11 扩展完成，不使用 ctypes。公共工具只负责构建，不推�
 - [`04_bytes_and_holder`](04_bytes_and_holder/readme.md)：通用 Ref、地址句柄与 Go 生命周期，以字节切片为例。
 - [`05_slice`](05_slice/readme.md)：值元素与 Go 对象元素的 slice，保持 Go 的共享与 append 语义。
 - [`06_named_type`](06_named_type/readme.md)：命名值类型、命名 slice 与 struct，ABI 由底层类型决定。
-- 后续：数组、error、指针与可空值、callback 与并发等。
+- [`07_ptr_basic`](07_ptr_basic/readme.md)：Python 中不可寻址的值类型（标量、slice 及其命名类型）的指针，值与指针的转换和方法集。
+- [`08_multi_ptr`](08_multi_ptr/readme.md)：多级指针、命名指针，以及生成器必须补齐的依赖类型（类型闭包）。
+- [`09_nil`](09_nil/readme.md)：带类型的 nil、nil 接收者，以及把 Go panic 转为 Python 异常。
+- 后续：数组、error、map、interface、callback 与并发等。
 
 编号代表研究顺序。后续案例如暴露旧规则的问题，应先修正文档和黄金样例，再实现
 生成逻辑。当前公共构建约定可以随真实案例需要调整，不预先引入复杂的配置机制。
