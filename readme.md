@@ -30,6 +30,9 @@ C ABI；pybind11 扩展再调用该 ABI，并向 Python 暴露 CPython 原生扩
 [`docs/generator-plan.md`](docs/generator-plan.md)，模块边界见
 [`docs/generator-architecture.md`](docs/generator-architecture.md)。每个可验证阶段单独提交。
 
+维护代码从[文档导航](docs/README.md)开始：按分工、模型、完整调用实例、运行时协议、
+扩展与排障逐步阅读。文档对应当前实现，并明确标出尚未落地的后续设计。
+
 examples 先行研究的问题是：对于一组有代表性的 Go 代码 G，理想的 Python
 包装 P 究竟应该是什么样，才能正确、安全并且符合 Python 的使用习惯？
 
