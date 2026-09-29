@@ -6,7 +6,7 @@
 本文使用以下几个简称：
 
 - **G**：作为输入的 Go 代码。
-- **C**：未来要实现的代码生成工具（不是 C 语言）。
+- **C**：代码生成工具（不是 C 语言）。
 - **P**：C 根据 G 生成的 pybind11/C++ 扩展、Python package 和 `.pyi` 类型声明。
 
 目标流程可以概括为：
@@ -47,6 +47,62 @@ examples 先行研究的问题是：对于一组有代表性的 Go 代码 G，�
 端到端测试为准，不能把计划中的能力当作已经实现。
 
 更详细的 example 规范和建议覆盖范围见 [`examples/readme.md`](examples/readme.md)。
+
+## 当前可用的生成器
+
+目前后端支持基础 bool、所有整数宽度（含 int/uint/uintptr）、float32/float64、
+string，以及由这些类型组成的函数参数和任意数量返回值。这些基础类型的 Go alias
+保留为 Python 类型别名。所有生成调用都处理可恢复 panic，包括 `panic(nil)`。
+
+前端已能分析 examples 01–09 的类型闭包；slice、named 包装、struct、指针的
+代码生成仍在后续阶段，遇到它们会明确报错。其他范围限制见实施计划。
+
+从仓库根目录运行：
+
+```sh
+go run . -out generated/basic ./examples/01_basic
+python generated/basic/build.py
+PYTHONPATH=generated/basic/.build/python python -c 'import go_basic_value as b; print(b.int_in_and_out(1))'
+```
+
+构建用的 Python 需安装 `pybind11`、`setuptools`；导入时使用同一解释器。
+当前实际验证环境为 macOS arm64、Go 1.27.1、CPython 3.13、pybind11 3.0.1。
+构建脚本也提供 Linux 路径，尚未在本轮执行 Linux 验证。仓库要求 Go 1.25.5 或更新。
+
+CLI 接受一个包目录或 import path：
+
+```sh
+go build -o /tmp/go-bridge .
+/tmp/go-bridge -out /tmp/my-bindings -name my_python_package /path/to/go/package
+/tmp/go-bridge -dir /path/to/go/module -out /tmp/my-bindings-other example.org/module/pkg
+```
+
+`-name` 默认为 `go_<包名的 snake_case>`。输出目录必须不存在或为空，生成器不覆盖
+已有项目。生成与构建分离；输出里的 `bridge.json` 记录原始源码目录，构建仍依赖
+原 Go module/workspace。输出不是可独立分发的 wheel，也不承诺搬迁源码后仍能构建。
+
+```text
+generated/basic/
+├── go/main.go             # Go C ABI 适配层
+├── bindings.cpp           # pybind11 绑定
+├── go_basic_value/        # __init__.py、__init__.pyi、py.typed
+├── bridge.json            # 构建上下文
+├── build.py
+└── .build/python/         # 构建后可导入的 package
+```
+
+验证命令：
+
+```sh
+go test ./...
+go vet ./...
+GO_BRIDGE_PYTHON=python go test ./internal/generate -run TestIntegration -v
+# 解释器还安装了 mypy 时，同时检查生成的 .pyi：
+GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIntegration -v
+```
+
+集成测试从生成产物编译和调用，不依赖 `expected/`；包括 01–03 与独立临时 module。
+未设置 `GO_BRIDGE_PYTHON` 时，常规 Go 测试会明确跳过原生编译集成测试。
 
 ## 每个 example 要回答的问题
 
@@ -124,14 +180,14 @@ func NewPerson(name string, age int, schools []School) *Person {
 ```python
 import go_person as person
 
-alice = person.NewPerson(
+alice = person.new_person(
     "alice",
     16,
-    [person.School(Name="PrimarySchool", Age=8, Duration=10)],
+    person.SliceSchool([person.School(name="PrimarySchool", age=8, duration=10)]),
 )
-print(alice.Name)
-alice.Name = "Alice"
-alice.SayName()
+print(alice.name)
+alice.name = "Alice"
+alice.say_name()
 ```
 
 这段代码表达的是长期 API 体验目标，并不表示其中涉及的 struct、slice、指针和
@@ -145,5 +201,5 @@ alice.SayName()
 - 不要只验证正常返回；同时验证边界值、错误路径、资源释放和重复调用。
 - 从多个黄金样例中提炼出稳定规则后，再将规则实现进生成器。
 
-仓库中的 `gen/`、`generated/` 和 `target_go/` 是早期探索或实验材料，可以用于
-理解问题，但当前不代表最终设计。
+旧 `gen/` 和硬编码生成入口已删除，新实现位于 `internal/`。`generated/` 用于本地
+产物，不提交；`examples/expected/` 继续作为手写行为参考维护。

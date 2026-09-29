@@ -1,6 +1,6 @@
 # 生成器实施计划
 
-状态：M0、M1 完成，M2 待实现。每完成一个可验证的阶段单独提交，下面的状态随代码更新。
+状态：M0–M2 完成，下一阶段是 M3（Ref 与 slice）。每完成一个可验证的阶段单独提交，下面的状态随代码更新。
 
 ## 目标与范围
 
@@ -68,13 +68,19 @@ Go 模型描述 Go 事实，不包含 Python/C ABI 名称。为 struct 补指针
 
 ### M2：基础值端到端
 
-- [ ] 建立 Python 接口模型，集中处理 snake_case、参数名、保留名与冲突诊断。
-- [ ] 建立 ABI 描述，使 Go 和 C++ 使用同一份签名/传输类型。
-- [ ] 生成基础值函数、任意数量返回值、字符串与 panic 转换。
-- [ ] 生成 `.pyi`、`__init__.py`、`py.typed`、构建入口及 CLI。
-- [ ] 从 examples 01–03 实际生成、编译、导入并验证；另测数值边界、字符串错误、
+- [x] 建立基础值 Python 接口模型，集中处理 snake_case、参数名、保留名与冲突诊断。
+- [x] 建立 ABI 描述，使 Go 和 C++ 使用同一份签名/传输类型。
+- [x] 生成基础值函数、任意数量返回值、字符串与 panic 转换。
+- [x] 生成 `.pyi`、`__init__.py`、`py.typed`、构建入口及 CLI。
+- [x] 从 examples 01–03 实际生成、编译、导入并验证；另测数值边界、字符串错误、
   多返回值的释放与 panic 后继续调用。
-- [ ] 尚未实现的后端类型明确拒绝，不因前端已能分析而宣称支持。
+- [x] 尚未实现的后端类型明确拒绝，不因前端已能分析而宣称支持。
+
+验证：全仓 `go test ./...`、`go vet ./...` 通过；原生集成测试使用
+`GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIntegration -v`，
+实际生成并编译 01–03 及一个独立 module 的产物，Go 构建启用 cgocheck2，生成的
+`.pyi` 通过 mypy strict。运行时另外覆盖 GODEBUG=panicnil=1，确保 panic(nil)
+不会静默吞掉。平台实测范围记录于首页。
 
 ### M3：Ref、slice 与批量传输
 
