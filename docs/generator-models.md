@@ -16,7 +16,7 @@
 | Slice | `Elem` | `[]int` 指向 int 节点 |
 | Pointer | `Elem` | `**int` 指向 `*int` 节点 |
 | Named，底层非 struct | `Name`、`PackagePath`、`Underlying`、方法集 | `type Count int` 指向 int 节点 |
-| Named，底层 struct | `Name`、`PackagePath`、`Fields`、方法集 | `type Node struct { Next *Node }` |
+| Named，底层 struct | `Name`、`PackagePath`、`Fields`、`Selectable`、方法集 | `type Node struct { Next *Node }` |
 
 这里没有独立的匿名 Struct 节点：匿名 struct 目前被拒绝，命名 struct 的直接导出字段
 就记录在 Named 节点中。需要检查其底层结构时，可以读取 `Type.Go.Underlying()`。
@@ -89,8 +89,17 @@ Python 表示；将来解决该映射时，也必须移除此处的限制。
 为隐藏接收者生成包装类，所以原始接收者保留为 `types.Type`，不要求一定对应公开节点。
 参数、结果中直接暴露未导出 named 类型仍会被拒绝。
 
-`Fields` 当前只保存直接导出字段，`Index` 计入未导出字段的位置。提升字段展开还未
-实现，不能从“提升方法已收集”推断“提升字段也已支持”。
+`Fields` 保存直接导出字段，供关键字构造使用，`Index` 计入未导出字段的位置。
+`Selectable` 保存最终可见的直接/提升字段：`selections` 遍历嵌入类型（包括未导出的
+嵌入类型）收集候选名字，再调用 `types.LookupFieldOrMethod` 决定遮蔽与歧义。选择
+路径只作诊断；Direct 表示直接字段，Indirect 表示选择路径经过指针解引用。
+生成代码使用公开字段名访问，不写出包外无法访问的私有嵌入路径。
+
+`Package.Ensure` 允许后续阶段用同一类型身份索引加入依赖；它只收集 Go 事实。
+`pyapi.complete` 定义桥接补全政策：仅命名 struct 自动加入 *T，不扩展无限指针链。
+补全会原地扩展传入的模型，重复补全不会改变模型；Type.Origin 保存首次引入节点的
+依赖路径，包含 API 来源或 bridge addr 来源。ptr() 的存在取决于补全后的闭包中是否
+存在 *T，不区分其来源。这一模型准备工作本身不代表新类型后端已通过验收。
 
 ## Python 模型：确定公开接口
 

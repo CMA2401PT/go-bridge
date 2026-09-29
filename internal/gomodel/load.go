@@ -120,7 +120,7 @@ func (b *builder) visit(t types.Type, where string) (*Type, error) {
 		return existing, nil
 	}
 	// Register before expanding, so recursive types terminate.
-	n := &Type{ID: len(b.model.Types), Go: t}
+	n := &Type{ID: len(b.model.Types), Go: t, Origin: where}
 	b.model.Types = append(b.model.Types, n)
 	b.model.index.Set(t, n)
 
@@ -168,6 +168,9 @@ func (b *builder) named(n *Type, t *types.Named, where string) error {
 
 	if structure, ok := t.Underlying().(*types.Struct); ok {
 		if err := b.fields(n, structure, where); err != nil {
+			return err
+		}
+		if err := b.selections(n, t, where); err != nil {
 			return err
 		}
 	} else {

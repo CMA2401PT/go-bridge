@@ -27,15 +27,17 @@ const (
 // A node is registered before its dependencies are visited, so edges may form
 // cycles (for example a struct holding a pointer to itself).
 type Type struct {
-	ID          int // position in Package.Types, stable for a given input
+	ID          int    // position in Package.Types, stable for a given input
+	Origin      string // first dependency path that introduced this node
 	Go          types.Type
 	Kind        Kind
 	Name        string // Basic and Named only
 	PackagePath string // Named only; empty for predeclared types
 
-	Underlying *Type   // Named non-struct only
-	Elem       *Type   // Slice or Pointer only
-	Fields     []Field // Named struct only: direct exported fields
+	Underlying *Type       // Named non-struct only
+	Elem       *Type       // Slice or Pointer only
+	Fields     []Field     // Named struct only: direct exported fields
+	Selectable []Selection // Named struct only: visible direct and promoted fields
 
 	// Method sets of T and *T, including promoted methods (Named only).
 	ValueMethods   []*Function
@@ -44,8 +46,8 @@ type Type struct {
 
 func (t *Type) String() string { return types.TypeString(t.Go, nil) }
 
-// Field is a direct exported field. Promoted fields are resolved later, since
-// their visibility depends on Go's selector ambiguity rules.
+// Field is a direct exported field, eligible for keyed construction. Every
+// Field also occurs in Selectable with Direct=true.
 type Field struct {
 	Name     string
 	Type     *Type
@@ -100,4 +102,15 @@ type Package struct {
 func (p *Package) Find(t types.Type) *Type {
 	node, _ := p.index.At(types.Unalias(t)).(*Type)
 	return node
+}
+
+// Selection is an exported field visible through a Go selector on a struct.
+// Path is diagnostic metadata; emitters select by Name so hidden embedding
+// paths never have to be named outside the target package.
+type Selection struct {
+	Name     string
+	Type     *Type
+	Path     []int
+	Indirect bool
+	Direct   bool
 }
