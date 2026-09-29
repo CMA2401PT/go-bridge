@@ -47,8 +47,8 @@
 
 ## 基础值类型
 
-直接是 Python 内建类型，按值复制（01、03）。Go `int` 为 `intptr_t`，越界、float、
-None 抛 `TypeError`。
+直接是 Python 内建类型，按值复制（01、03）。Go `int` 为 `intptr_t`，float、None
+抛 `TypeError`，越界抛 `OverflowError`。
 
 ## 引用类型：slice
 

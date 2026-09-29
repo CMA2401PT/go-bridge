@@ -159,9 +159,9 @@ func TestIntegrationExamples(t *testing.T) {
 assert b.int_in_and_out(a=1) == 2
 assert b.bool_in_and_out(b=True) is False
 assert b.basic_go_spec_type(u16=65535) == 0
-for v in [-1, 65536, 1.2, None]:
+for v, error in [(-1, OverflowError), (65536, OverflowError), (1.2, TypeError), (None, TypeError)]:
     try: b.basic_go_spec_type(v)
-    except TypeError: pass
+    except error: pass
     else: raise AssertionError(v)
 `},
 		{"02_multi_return", "go_multi", `import go_multi as b
@@ -247,9 +247,10 @@ for name, bits, signed in [
     low = -(1 << (bits - 1)) if signed else 0
     high = (1 << (bits - int(signed))) - 1
     for v in [low, 0, high, True]: assert f(v) == v
-    for v in [low - 1, high + 1, 1.5, None, "1", 1 << 200]:
+    for v, error in [(low - 1, OverflowError), (high + 1, OverflowError), (1 << 200, OverflowError),
+                     (1.5, TypeError), (None, TypeError), ("1", TypeError)]:
         try: f(v)
-        except TypeError: pass
+        except error: pass
         else: raise AssertionError((name, v))
 assert b.bool(True) is True
 for v in [0, 1, None]:

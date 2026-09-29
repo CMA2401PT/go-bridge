@@ -96,8 +96,9 @@ panic 标志与消息长度独立，因此 `panic("")` 不会遗漏。Go 适配�
 Go 异常只能恢复当前调用 goroutine 中可 recover 的 panic。
 
 Python bool 参数只接受 bool；整数参数接受 int（含 bool 子类关系）并检查目标
-Go 位宽，越界抛 TypeError。浮点参数接受 Python float/int，float32 按 Go 的宽度
-舍入；大整数转换为 Python double 失败会抛 OverflowError。字符串只接受 str。
+Go 位宽：类型不符抛 TypeError，越界抛 OverflowError（与 CPython 的 C 整数转换
+一致）。浮点参数接受 Python float/int，float32 按 Go 的宽度舍入；大整数转换为
+Python double 失败同样抛 OverflowError。字符串只接受 str。
 
 生成的 `.pyi` 使用 `_builtins.int` 等限定名字，避免公开函数 `Int` → `int` 遮蔽
 基础类型。函数参数采用原始 Go 参数名经 snake_case 转换的结果；无名或 `_` 参数
