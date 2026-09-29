@@ -12,6 +12,7 @@
 | 新的类型依赖、方法/字段信息 | `visit`、`named`、`fields`、`methods`、`tuple` | 闭包、类型身份、递归、接收者与选择类型 |
 | Python 类型或名字 | [pyapi.Plan/basicName/planFunction](../internal/pyapi/model.go) | alias、缩写/关键字、冲突和公开签名 |
 | C 表示、位宽或结果协议 | [abi.Plan/wireType](../internal/abi/model.go) | 两端签名、运行时转换、结果释放 |
+| Go 初始化、无函数包导入 | `abi.InitSymbol`、`goSource`、`cppSource`、`pythonSource` | 头文件生成、实际加载动态库、导入等待 Go init 完成 |
 | Go 导出操作 | [goOperation/goInput/goOutput](../internal/emit/adapter.go) | 生成的 Go 编译与目标 API 行为 |
 | C++ 调用及结果接管 | [cppFunction/cppOwner](../internal/emit/bindings.go) | 正常与失败路径，所有结果的所有权 |
 | 公共 `.pyi` / Python 导出 | [stubSource/pythonSource](../internal/emit/python.go) | 类型声明、`__all__`、内建名字被遮蔽的情况 |
@@ -88,6 +89,10 @@ panic、除零和 nil 解引用无法被 Python 捕获；panic(nil) 覆盖默认
 模式，并确认目标 Go 代码自身的 recover 仍有效。mypy 检查生成的 `.pyi`；脚本另执行
 声明文件并检查部分注解，防止 int/tuple 等公开函数遮蔽内建类型。
 
+`TestIntegrationWithoutFunctions` 实际构建只有 alias 和没有公开声明的包，使用延迟
+初始化写入文件来检查 import 返回前 Go init 已完成；`TestIntegrationPanicDuringImport`
+在独立 Python 子进程中验证 init panic 终止进程且无法被 try/except 捕获。
+
 按变更范围选择测试：纯命名改动先运行 pyapi/emit；改变传输或运行时语义必须跑原生
 集成测试；文档改动核对链接、关键符号和可执行命令。通过后只有出现新改动或疑点才
 扩大或重复测试。
@@ -114,6 +119,3 @@ panic、除零和 nil 解引用无法被 Python 捕获；panic(nil) 覆盖默认
 
 当前构建脚本面向 macOS/Linux、启用 GIL 的 CPython。macOS arm64 已实测；Linux
 代码路径存在，但不应把本机测试结果表述为 Linux 已验收。
-
-已知缺陷：只有 alias、没有导出函数的包可以生成源码，但实际构建时缺少 cgo 头文件，
-导致 C++ 编译失败。现有无函数包的文本测试不能证明该路径可以构建。

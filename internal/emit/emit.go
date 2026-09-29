@@ -30,6 +30,7 @@ Generated from ` + "`%s`" + `. Requires the original Go source tree.
 Build with ` + "`python build.py`" + ` (pybind11 and setuptools required).
 Import from ` + "`.build/python`" + ` using that same interpreter.
 The adapter and extension are a matched pair; regenerate and rebuild together.
+Import waits for the target Go package to finish initialization.
 Go panics are not recovered by the bridge. An unhandled panic terminates the
 entire Python process and cannot be caught with Python try/except.
 `

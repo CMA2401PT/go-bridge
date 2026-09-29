@@ -15,6 +15,11 @@ import (
 	"go-bridge/internal/pyapi"
 )
 
+// InitSymbol is the internal void(void) entry point called when the native
+// module loads. Entering an exported Go function waits for Go initialization.
+// It is separate from target API operations and has no Python export.
+const InitSymbol = "SBInit"
+
 // Kind selects the conversion used on both sides of the boundary.
 type Kind string
 

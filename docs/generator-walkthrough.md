@@ -126,7 +126,8 @@ if r1 {
 函数退出或转换中途抛出 Python 异常时，owner 析构都释放结果字符串。
 
 `pythonSource` 导入 `_native` 并重新导出 pair，定义 Text alias 与 `__all__`。
-即使包中只有 alias、没有函数，也会加载 `_native`，使目标 Go 包仍有机会执行初始化。
+即使包中只有 alias、没有函数，也会加载 `_native`。C++ 模块初始化调用内部 SBInit，
+等待目标 Go 包初始化完成；该入口不占用 SBCallN 序号，也不公开到 Python。
 `Files` 汇总上述产物并格式化 Go 源码；`publish` 最后写入输出目录。
 
 ## 编译后的调用

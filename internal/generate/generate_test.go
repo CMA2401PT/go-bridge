@@ -208,6 +208,62 @@ sys.exit(78)
 	}
 }
 
+func TestIntegrationWithoutFunctions(t *testing.T) {
+	python := integrationPython(t)
+	for _, tc := range []struct{ name, declaration, check string }{
+		{"alias", "type Text = string", `assert b.Text is str; assert b.__all__ == ["Text"]`},
+		{"empty", "", `assert b.__all__ == []`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			marker := filepath.Join(t.TempDir(), "initialized")
+			t.Setenv("GO_BRIDGE_INIT_MARKER", marker)
+			source := module(t, `import ("os"; "time")
+`+tc.declaration+`
+func init() {
+	// Import must wait for Go initialization, not just start it asynchronously.
+	time.Sleep(50 * time.Millisecond)
+	if err := os.WriteFile(os.Getenv("GO_BRIDGE_INIT_MARKER"), []byte("ready"), 0600); err != nil {
+		panic(err)
+	}
+}
+`)
+			buildAndRun(t, python, source, "init_contract", `
+import os
+from pathlib import Path
+import init_contract as b
+assert Path(os.environ["GO_BRIDGE_INIT_MARKER"]).read_text() == "ready"
+assert not hasattr(b, "SBInit")
+assert not hasattr(b._native, "SBInit")
+`+tc.check)
+		})
+	}
+}
+
+func TestIntegrationPanicDuringImport(t *testing.T) {
+	python := integrationPython(t)
+	source := module(t, `type Text = string
+func init() { panic("target init") }`)
+	out := buildProject(t, python, source, "init_panic")
+	script := "import sys\nsys.path.insert(0, " + pythonLiteral(filepath.Join(out, ".build/python")) + ")\n" + `
+print("before import", flush=True)
+try:
+    import init_panic
+except BaseException:
+    print("caught in Python", flush=True)
+print("after import", flush=True)
+`
+	cmd := exec.Command(python, "-c", script)
+	cmd.Env = append(os.Environ(), "GOTRACEBACK=single")
+	output, err := cmd.CombinedOutput()
+	if _, ok := err.(*exec.ExitError); !ok ||
+		!bytes.Contains(output, []byte("before import")) ||
+		!bytes.Contains(output, []byte("panic: target init")) ||
+		bytes.Contains(output, []byte("caught in Python")) ||
+		bytes.Contains(output, []byte("after import")) {
+		t.Fatalf("expected fatal Go initialization during import: %v\n%s", err, output)
+	}
+}
+
 func TestIntegrationExamples(t *testing.T) {
 	python := integrationPython(t)
 	for _, tc := range []struct{ example, name, script string }{

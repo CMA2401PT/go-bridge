@@ -31,8 +31,8 @@ func bridgeInput(value C.SBString) string {
 }
 `
 
-// goSource renders the cgo adapter: one exported function per operation that
-// calls the target package and converts values. Go panics propagate normally.
+// goSource renders the cgo adapter: an internal initialization entry point and
+// one exported function per target operation. Go panics propagate normally.
 func goSource(p *abi.Package) string {
 	var b strings.Builder
 	b.WriteString(adapterPrelude)
@@ -54,6 +54,9 @@ func goSource(p *abi.Package) string {
 	}
 	fmt.Fprintf(&b, "%s %q\n)\n", alias, p.Python.Go.Path)
 	b.WriteString(adapterRuntime)
+	// An export is required even without API operations: cgo emits the header,
+	// and C++ can enter Go to wait for target package initialization.
+	fmt.Fprintf(&b, "\n//export %s\nfunc %s() {}\n", abi.InitSymbol, abi.InitSymbol)
 	for _, op := range p.Operations {
 		goOperation(&b, op)
 	}

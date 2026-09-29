@@ -5,6 +5,17 @@
 本页描述已经实现的基础值协议。Ref/holder、句柄、nil 指针和 slice 批量传输尚未进入
 生成后端，不应根据手写 examples 推断这里已经支持这些路径。
 
+## 模块加载与 Go 初始化
+
+每个生成库都导出内部入口 `void SBInit(void)`，名称由 `abi.InitSymbol` 统一定义。
+`__init__.py` 总是导入 `_native`，C++ 在模块初始化时调用 SBInit。函数体为空；进入
+cgo 导出的 Go 函数会等待 Go runtime 和包初始化完成。它不重复运行目标包的 init，
+不向 Python 公开，也不增加每次业务调用的步骤。
+
+这个入口同时保证没有导出函数的包也能生成 cgo 头文件，并让扩展对 Go 库有实际符号
+依赖。只有 alias 或没有公开声明的包同样遵循这条初始化路径，不需要伪造业务操作。
+Go init 中未恢复的 panic 会在 Python 导入过程中终止进程，仍不转换为 Python 异常。
+
 ## 值如何跨边界
 
 类型选择在 [abi.wireType](../internal/abi/model.go)，C++ 输入转换在

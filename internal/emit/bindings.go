@@ -24,6 +24,7 @@ func cppSource(p *abi.Package) string {
 PYBIND11_MODULE(_native, module) {
 module.doc() = "Generated Go bindings";
 `)
+	fmt.Fprintf(&b, "%s();\n", abi.InitSymbol)
 	for _, op := range p.Operations {
 		cppFunction(&b, op)
 	}

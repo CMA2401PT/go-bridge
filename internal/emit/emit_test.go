@@ -74,9 +74,10 @@ func Pair(n int, s Text, f float32) (Text, bool) { return s, n > 0 }`)
 	contains(t, "go_api/__init__.py", out["go_api/__init__.py"], `__all__ = ["pair","Text"]`)
 }
 
-func TestPackageWithoutFunctionsOnlyLinksTarget(t *testing.T) {
+func TestPackageWithoutFunctionsInitializesTarget(t *testing.T) {
 	out := files(t, `type Text = string`)
-	contains(t, "go/main.go", out["go/main.go"], `_ "example.test/api"`)
+	contains(t, "go/main.go", out["go/main.go"], `_ "example.test/api"`, "//export SBInit", "func SBInit() {}")
+	contains(t, "bindings.cpp", out["bindings.cpp"], "SBInit();")
 	contains(t, "go_api/__init__.py", out["go_api/__init__.py"], "from . import _native")
 }
 
