@@ -138,8 +138,11 @@ func (b *builder) visit(t types.Type, where string) (*Type, error) {
 		if t.Obj().Pkg() != nil {
 			n.PackagePath = t.Obj().Pkg().Path()
 		}
+		if _, ok := t.Underlying().(*types.Interface); ok {
+			return nil, fmt.Errorf("%s: unsupported interface type %s", where, t)
+		}
 		if !t.Obj().Exported() {
-			return nil, fmt.Errorf("%s: non-exported named type %s cannot be named by the adapter", where, t)
+			return nil, fmt.Errorf("%s: non-exported named type %s is not supported", where, t)
 		}
 		if t.TypeParams().Len() != 0 || t.TypeArgs().Len() != 0 {
 			return nil, fmt.Errorf("%s: generic type %s is not supported", where, t)
@@ -178,11 +181,16 @@ func (b *builder) visit(t types.Type, where string) (*Type, error) {
 				if !method.Exported() {
 					continue
 				}
-				r, err := b.visit(receiver, where+" -> receiver of "+method.Name())
-				if err != nil {
-					return nil, err
+				declared := types.Unalias(method.Type().(*types.Signature).Recv().Type())
+				// Only an actual receiver declaration introduces a dependency.
+				// A promoted method on a hidden embedded type is still callable
+				// through the public owner, without exposing that hidden type.
+				if types.Identical(declared, t) || types.Identical(declared, types.NewPointer(t)) {
+					if _, err := b.visit(declared, where+" -> receiver of "+method.Name()); err != nil {
+						return nil, err
+					}
 				}
-				fn, err := b.function(method, r, where+" -> method "+method.Name())
+				fn, err := b.function(method, receiver, where+" -> method "+method.Name())
 				if err != nil {
 					return nil, err
 				}
@@ -199,7 +207,7 @@ func (b *builder) visit(t types.Type, where string) (*Type, error) {
 	return n, nil
 }
 
-func (b *builder) function(obj *types.Func, receiver *Type, where string) (*Function, error) {
+func (b *builder) function(obj *types.Func, selected types.Type, where string) (*Function, error) {
 	sig := obj.Type().(*types.Signature)
 	if sig.TypeParams().Len() != 0 {
 		return nil, fmt.Errorf("%s: generic function is not supported", where)
@@ -207,9 +215,10 @@ func (b *builder) function(obj *types.Func, receiver *Type, where string) (*Func
 	if sig.Variadic() {
 		return nil, fmt.Errorf("%s: variadic function is not supported", where)
 	}
-	fn := &Function{Name: obj.Name(), Receiver: receiver}
+	fn := &Function{Name: obj.Name(), SelectedReceiver: selected}
 	if sig.Recv() != nil {
-		_, fn.PointerReceiver = types.Unalias(sig.Recv().Type()).(*types.Pointer)
+		fn.Receiver = types.Unalias(sig.Recv().Type())
+		_, fn.PointerReceiver = fn.Receiver.(*types.Pointer)
 	}
 	for _, part := range []struct {
 		label string

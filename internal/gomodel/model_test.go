@@ -100,7 +100,7 @@ func (c *Child) Set(v Count) {}
 	if c.ValueMethods[0].Params[0].Type.Kind != Slice {
 		t.Fatal("method signature dependency missing")
 	}
-	if c.PointerMethods[0].Receiver.Kind != Pointer || !c.PointerMethods[0].PointerReceiver {
+	if _, ok := c.PointerMethods[0].Receiver.(*types.Pointer); !ok || !c.PointerMethods[0].PointerReceiver {
 		t.Fatal("pointer receiver lost")
 	}
 	parent := named(p, "Parent")
@@ -113,6 +113,33 @@ func (c *Child) Set(v Count) {}
 	// **Count is not created by recursively adding a pointer to each type.
 	if p.Find(types.NewPointer(types.NewPointer(c.Go))) != nil {
 		t.Fatal("unbounded pointer expansion")
+	}
+}
+
+func TestMethodSetQueryDoesNotInventTypes(t *testing.T) {
+	p, err := analyzeSource(t, `
+type Counter int
+func (c Counter) Read() int { return int(c) }
+type hidden struct{}
+func (hidden) Public() int { return 1 }
+type Owner struct{ hidden }
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := named(p, "Counter")
+	if p.Find(types.NewPointer(c.Go)) != nil {
+		t.Fatal("querying a method set invented a pointer dependency")
+	}
+	if len(c.PointerMethods) != 1 || !types.Identical(c.PointerMethods[0].Receiver, c.Go) {
+		t.Fatal("declared receiver lost")
+	}
+	if !types.Identical(c.PointerMethods[0].SelectedReceiver, types.NewPointer(c.Go)) {
+		t.Fatal("selected receiver lost")
+	}
+	owner := named(p, "Owner")
+	if len(owner.ValueMethods) != 1 || named(p, "hidden") != nil {
+		t.Fatal("promoted method requires a wrapper for a hidden receiver")
 	}
 }
 

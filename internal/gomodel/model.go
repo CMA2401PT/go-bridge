@@ -10,7 +10,6 @@ const (
 	Named   Kind = "named"
 	Slice   Kind = "slice"
 	Pointer Kind = "pointer"
-	Struct  Kind = "struct"
 )
 
 // Type is registered before its dependencies are visited. Edges may form cycles.
@@ -47,14 +46,16 @@ type Parameter struct {
 	Type *Type
 }
 
-// Receiver is the type on which this method was selected, including promoted
-// methods. PointerReceiver records the original declaration's receiver form.
+// Receiver is the declared receiver; SelectedReceiver is the type whose method
+// set was queried. Querying *T's method set does not itself put *T in the type
+// closure. Promoted methods may be declared on an unexported embedded type.
 type Function struct {
-	Name            string
-	Receiver        *Type
-	PointerReceiver bool
-	Params          []Parameter
-	Results         []Parameter
+	Name             string
+	Receiver         types.Type
+	SelectedReceiver types.Type
+	PointerReceiver  bool
+	Params           []Parameter
+	Results          []Parameter
 }
 
 // Declaration preserves exported alias names without inventing type identities.
