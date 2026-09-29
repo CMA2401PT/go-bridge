@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"go/types"
 
+	"go-bridge/internal/gomodel"
 	"go-bridge/internal/pyapi"
 )
 
@@ -29,11 +30,13 @@ const (
 	Boolean  Kind = "boolean"
 	Float    Kind = "float"
 	String   Kind = "string"
+	Handle   Kind = "handle"
 )
 
 // Type is the wire representation of one Python-facing type.
 type Type struct {
 	Python *pyapi.Type
+	Cpp    string // internal C++ wrapper type name for handles
 	Kind   Kind
 	C      string // C type name, e.g. "int32_t" or "SBString"
 	Go     string // Go type name used to convert the wire value back
@@ -55,6 +58,7 @@ type Operation struct {
 type Package struct {
 	Python     *pyapi.Package
 	Operations []*Operation
+	Slices     []*Slice
 	IntBits    int // width of Go int on the target; checked by the C++ side
 }
 
@@ -83,10 +87,22 @@ func Plan(p *pyapi.Package) (*Package, error) {
 		}
 		result.Operations = append(result.Operations, op)
 	}
+	for _, t := range p.Types {
+		if t.Elem == nil {
+			continue
+		}
+		prefix := fmt.Sprintf("SBType%d", t.Go.ID)
+		result.Slices = append(result.Slices, &Slice{Type: wire[t], Elem: wire[t.Elem],
+			New: prefix + "New", Len: prefix + "Len", At: prefix + "At", Set: prefix + "Set",
+			Reslice: prefix + "Reslice", Clone: prefix + "Clone", Copy: prefix + "Copy"})
+	}
 	return result, nil
 }
 
 func wireType(t *pyapi.Type, sizes types.Sizes) (*Type, error) {
+	if t.Go.Kind == gomodel.Slice {
+		return &Type{Python: t, Kind: Handle, C: "uintptr_t", Go: types.TypeString(t.Go.Go, nil), Cpp: fmt.Sprintf("Type%d", t.Go.ID)}, nil
+	}
 	basic, ok := t.Go.Go.(*types.Basic)
 	if !ok {
 		return nil, fmt.Errorf("ABI for %s is not implemented", t.Go)
@@ -123,3 +139,17 @@ func wireType(t *pyapi.Type, sizes types.Sizes) (*Type, error) {
 	}
 	return w, nil
 }
+
+// Slice plans the typed bulk and element operations of one concrete slice.
+// New borrows an element buffer; Copy writes owned elements into caller memory.
+// At returns one owned element, and Reslice/Clone/New return owned handles.
+type Slice struct {
+	Type, Elem                              *Type
+	New, Len, At, Set, Reslice, Clone, Copy string
+}
+
+const (
+	ReleaseSymbol = "SBRelease"
+	CountSymbol   = "SBHolderCount"
+	CollectSymbol = "SBCollect"
+)

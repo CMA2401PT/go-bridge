@@ -78,7 +78,7 @@ func TestPublicationAndDeterminism(t *testing.T) {
 }
 
 func TestFailureDoesNotPublish(t *testing.T) {
-	source := module(t, "func Unsupported(v []int) {}")
+	source := module(t, "type Count int; func Unsupported(v Count) {}")
 	out := filepath.Join(t.TempDir(), "absent")
 	if err := Run(Config{Target: source, Output: out}); err == nil || !strings.Contains(err.Error(), "not implemented yet") {
 		t.Fatal(err)
@@ -383,7 +383,8 @@ ast.parse(stub)
 # not shadow builtin types in stubs. A callable object is not a type annotation.
 namespace = {}
 exec(compile(stub, "generated.pyi", "exec"), namespace)
-assert namespace["int"].__annotations__["return"] is int
-assert namespace["tuple"].__annotations__["return"] == tuple[int, str]
+import typing
+assert typing.get_type_hints(namespace["int"], namespace)["return"] is int
+assert typing.get_type_hints(namespace["tuple"], namespace)["return"] == tuple[int, str]
 `)
 }

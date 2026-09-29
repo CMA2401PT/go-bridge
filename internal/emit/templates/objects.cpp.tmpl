@@ -1,0 +1,49 @@
+
+
+// Move-only ownership; no raw handle is visible to Python.
+struct Ref {
+    uintptr_t handle;
+    explicit Ref(uintptr_t value) : handle(value) {}
+    Ref(const Ref&) = delete;
+    Ref& operator=(const Ref&) = delete;
+    Ref(Ref&& other) noexcept : handle(std::exchange(other.handle, 0)) {}
+    ~Ref() { SBRelease(handle); }
+};
+struct Slice : Ref { using Ref::Ref; };
+template<int ID, typename Base> struct GoObject : Base { using Base::Base; };
+
+// Check the actual holder before casting: pybind11 can otherwise allocate raw,
+// uninitialized C++ storage for an object created by a direct __new__ call.
+// Select this type's slot, also for Python classes with multiple native bases.
+template<typename T> const T& checked_ref(py::handle value) {
+    if (!py::isinstance<T>(value)) throw py::type_error("expected the matching Go wrapper type");
+    auto* instance = reinterpret_cast<py::detail::instance*>(value.ptr());
+    auto holder = instance->get_value_and_holder(py::detail::get_type_info(typeid(T)));
+    if (!holder.holder_constructed()) throw py::type_error("Go wrapper has not been initialized");
+    return py::cast<const T&>(value);
+}
+template<typename T> uintptr_t handle_arg(py::handle value) {
+    return checked_ref<T>(value).handle;
+}
+
+template<typename T> void release_value(T) {}
+inline void release_string(SBString value) { std::free(value.data); }
+inline void release_handle(uintptr_t value) { SBRelease(value); }
+
+// Own every element before any Python result is built. Zeroed entries carry
+// no ownership; conversions transfer individual handles by exchanging with 0.
+template<typename T, void (*Release)(T)> struct OwnedBuffer {
+    std::vector<T> values;
+    explicit OwnedBuffer(size_t n) : values(n) {}
+    ~OwnedBuffer() { for (auto value : values) Release(value); }
+};
+
+inline size_t slice_index(py::handle index, size_t size) {
+    auto number = py::reinterpret_steal<py::object>(PyNumber_Index(index.ptr()));
+    if (!number) throw py::error_already_set();
+    Py_ssize_t n = PyNumber_AsSsize_t(number.ptr(), PyExc_IndexError);
+    if (n == -1 && PyErr_Occurred()) throw py::error_already_set();
+    if (n < 0) n += static_cast<Py_ssize_t>(size);
+    if (n < 0 || static_cast<size_t>(n) >= size) throw py::index_error("Go slice index out of range");
+    return static_cast<size_t>(n);
+}

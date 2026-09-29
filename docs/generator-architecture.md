@@ -86,8 +86,8 @@ workspace 和 replace 规则继续生效；`package` 决定 Python 包名和库�
 
 ## 当前边界与后续设计
 
-目前完整链路只覆盖基础值函数。Go 前端已经识别 named、slice、struct 和指针，但
-`pyapi.basicName` 会拒绝非 Basic 节点。生成器中尚无 holder、Ref 包装类或句柄传输。
+目前完整链路覆盖基础值、alias、Ref 与 slice。Go 前端已经识别 named、struct 和指针，
+但这些类别的后端仍在后续阶段。对象操作的模块分工见[对象协议](generator-objects.md)。
 
 后续生成的包装类仍放 C++，通过 pybind11 暴露；Python `__init__.py` 主要重新导出。
 struct 的 `addr()`、视图、指针类以及 slice 操作要先进入接口/ABI 模型，再扩展输出器。

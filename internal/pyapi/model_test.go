@@ -61,7 +61,6 @@ func TestConflictsAndBackendBoundary(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
 		{`func URLValue() {}; func UrlValue() {}`, "collides"},
 		{`func F(from int, from_ int) {}`, "parameter"},
-		{`func F(v []int) {}`, "not implemented yet"},
 		{`type Count int`, "not implemented yet"},
 	} {
 		p, err := planSource(t, tc.source)

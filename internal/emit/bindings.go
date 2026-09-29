@@ -14,6 +14,14 @@ func cppSource(p *abi.Package) string {
 	// The header is written by `go build -buildmode=c-shared` next to the library.
 	fmt.Fprintf(&b, "#include %q\n", "libbridge_"+p.Python.Name+".h")
 	b.WriteString(cppRuntime)
+	if len(p.Slices) > 0 {
+		fmt.Fprintf(&b, "#include <utility>\n#include <vector>\nnamespace bridge_%s {\n", p.Python.Name)
+		b.WriteString(cppObjects)
+		for _, s := range p.Slices {
+			fmt.Fprintf(&b, "using %s = GoObject<%d, Slice>;\n", s.Type.Cpp, s.Type.Python.Go.ID)
+		}
+		fmt.Fprintf(&b, "}\nusing namespace bridge_%s;\n", p.Python.Name)
+	}
 	fmt.Fprintf(&b, "\nstatic_assert(sizeof(intptr_t) * 8 == %d, \"regenerate for this target architecture\");\n", p.IntBits)
 	for _, op := range p.Operations {
 		if len(op.Results) > 0 {
@@ -25,6 +33,12 @@ PYBIND11_MODULE(_native, module) {
 module.doc() = "Generated Go bindings";
 `)
 	fmt.Fprintf(&b, "%s();\n", abi.InitSymbol)
+	if len(p.Slices) > 0 {
+		cppRefClasses(&b)
+		for _, s := range p.Slices {
+			cppSlice(&b, s)
+		}
+	}
 	for _, op := range p.Operations {
 		cppFunction(&b, op)
 	}
@@ -38,9 +52,7 @@ module.doc() = "Generated Go bindings";
 func cppOwner(b *strings.Builder, op *abi.Operation) {
 	fmt.Fprintf(b, "struct Owned%s {\n%s data;\n~Owned%s() {\n", op.Result, op.Result, op.Result)
 	for i, r := range op.Results {
-		if r.Kind == abi.String {
-			fmt.Fprintf(b, "std::free(data.r%d.data);\n", i)
-		}
+		cppRelease(b, r, fmt.Sprintf("data.r%d", i))
 	}
 	b.WriteString("}\n};\n")
 }
@@ -57,7 +69,7 @@ func cppFunction(b *strings.Builder, op *abi.Operation) {
 	if len(op.Results) == 0 {
 		fmt.Fprintf(b, "%s(%s);\n", op.Symbol, args)
 	} else {
-		fmt.Fprintf(b, "Owned%s owned{%s(%s)};\nconst auto& result = owned.data;\n", op.Result, op.Symbol, args)
+		fmt.Fprintf(b, "Owned%s owned{%s(%s)};\nauto& result = owned.data;\n", op.Result, op.Symbol, args)
 	}
 	switch len(op.Results) {
 	case 0:
@@ -81,6 +93,8 @@ func cppFunction(b *strings.Builder, op *abi.Operation) {
 // cppInput names the runtime helper converting a Python argument.
 func cppInput(t *abi.Type) string {
 	switch t.Kind {
+	case abi.Handle:
+		return "handle_arg<" + t.Cpp + ">"
 	case abi.String:
 		return "string_arg"
 	case abi.Boolean:
@@ -95,6 +109,8 @@ func cppInput(t *abi.Type) string {
 // cppOutput converts a C result field to a Python object.
 func cppOutput(t *abi.Type, field string) string {
 	switch t.Kind {
+	case abi.Handle:
+		return "py::cast(" + t.Cpp + "(std::exchange(" + field + ", 0)))"
 	case abi.String:
 		return "decode(" + field + ")"
 	case abi.Boolean:
@@ -103,5 +119,14 @@ func cppOutput(t *abi.Type, field string) string {
 		return "py::float_(" + field + ")"
 	default:
 		return "py::int_(" + field + ")"
+	}
+}
+
+func cppRelease(b *strings.Builder, t *abi.Type, field string) {
+	switch t.Kind {
+	case abi.String:
+		fmt.Fprintf(b, "std::free(%s.data);\n", field)
+	case abi.Handle:
+		fmt.Fprintf(b, "%s(%s);\n", abi.ReleaseSymbol, field)
 	}
 }

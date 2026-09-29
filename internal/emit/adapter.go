@@ -60,6 +60,9 @@ func goSource(p *abi.Package) string {
 	for _, op := range p.Operations {
 		goOperation(&b, op)
 	}
+	for _, s := range p.Slices {
+		goSlice(&b, s)
+	}
 	b.WriteString("\nfunc main() {}\n")
 	return b.String()
 }
@@ -90,6 +93,8 @@ func goOperation(b *strings.Builder, op *abi.Operation) {
 // goInput converts a C argument to the Go parameter type.
 func goInput(t *abi.Type, value string) string {
 	switch t.Kind {
+	case abi.Handle:
+		return "bridgeGet[" + t.Go + "](" + value + ")"
 	case abi.String:
 		return "bridgeInput(" + value + ")"
 	case abi.Boolean:
@@ -102,6 +107,8 @@ func goInput(t *abi.Type, value string) string {
 // goOutput stores a Go result into its C result field.
 func goOutput(b *strings.Builder, t *abi.Type, field, value string) {
 	switch t.Kind {
+	case abi.Handle:
+		fmt.Fprintf(b, "%s = bridgePin(%s)\n", field, value)
 	case abi.String:
 		fmt.Fprintf(b, "%s = bridgeString(%s)\n", field, value)
 	case abi.Boolean:

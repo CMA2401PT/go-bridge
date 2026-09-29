@@ -55,7 +55,8 @@ examples 先行研究的问题是：对于一组有代表性的 Go 代码 G，�
 
 目前后端支持基础 bool、所有整数宽度（含 int/uint/uintptr）、float32/float64、
 string，以及由这些类型组成的函数参数和任意数量返回值。这些基础类型的 Go alias
-保留为 Python 类型别名。生成调用不捕获 Go panic：未恢复的 panic（含 `panic(nil)`）
+保留为 Python 类型别名。已支持 Ref、字节/一般/嵌套 slice 的构造、索引、共享切片、
+clone 与批量复制。生成调用不捕获 Go panic：未恢复的 panic（含 `panic(nil)`）
 终止整个 Python 进程，不能用 Python `try/except` 捕获。详见[运行时契约](docs/generator-runtime.md)。
 
 前端已能分析 examples 01–09 的类型闭包；slice、named 包装、struct、指针的

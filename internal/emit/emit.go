@@ -18,6 +18,9 @@ import (
 //go:embed templates/runtime.cpp.tmpl
 var cppRuntime string
 
+//go:embed templates/objects.cpp.tmpl
+var cppObjects string
+
 // buildScript is copied verbatim; it reads its parameters from bridge.json.
 //
 //go:embed templates/build.py
@@ -53,7 +56,7 @@ func Files(p *abi.Package) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string][]byte{
+	result := map[string][]byte{
 		"go/main.go":                           adapter,
 		"bindings.cpp":                         []byte(cppSource(p)),
 		filepath.Join(py.Name, "__init__.pyi"): []byte(stubSource(py)),
@@ -62,7 +65,15 @@ func Files(p *abi.Package) (map[string][]byte, error) {
 		"build.py":                             []byte(buildScript),
 		"bridge.json":                          append(config, '\n'),
 		"README.md":                            []byte(fmt.Sprintf(readme, py.Name, g.Path)),
-	}, nil
+	}
+	if len(p.Slices) > 0 {
+		holder, err := format.Source([]byte(holderSource))
+		if err != nil {
+			return nil, fmt.Errorf("format holder: %w", err)
+		}
+		result["go/holder.go"] = holder
+	}
+	return result, nil
 }
 
 // join renders n items separated by ", ".
