@@ -20,13 +20,13 @@ assert go_str.recv_and_return("你好\0world") == "Echo: 你好\0world"
 
 ## string：C.GoStringN 与 C.CString
 
-Python str 先由 C++ 转为 UTF-8，并包装为一个 `SBString`（指针与长度）。
-Go 导出函数的参数和返回值都是 `C.SBString`，所以一个 Go `string` 在函数
+Python str 先由 C++ 转为 UTF-8，并包装为一个 `BrString`（指针与长度）。
+Go 导出函数的参数和返回值都是 `C.BrString`，所以一个 Go `string` 在函数
 签名中始终占一个参数或返回位置。输入结构体及其 UTF-8 缓冲区只在调用期间
 借用 Python 内存；Go 包裹层用 `C.GoStringN` 拷贝为 Go string。带长度的版本
 保留内嵌 `\0`，而 `C.GoString` 按 NUL 终止。
 
-Go 返回时，`SBString` 结构体按值返回，只有字符数据由 `C.CString` 分配在 C 内存。
+Go 返回时，`BrString` 结构体按值返回，只有字符数据由 `C.CString` 分配在 C 内存。
 C++ 包裹层按保存的长度严格解码为 Python str，然后释放字符数据。
 转换和释放逻辑分别封装在 Go/C++ 两侧；string 不进入 holder。
 
@@ -38,10 +38,10 @@ C++ 包裹层按保存的长度严格解码为 Python str，然后释放字符�
 
 | Go API | C ABI | Python API |
 | --- | --- | --- |
-| `string` 参数 | 按值传入 `SBString` | `str` |
-| `string` 返回值 | 按值返回 `SBString` | `str` |
+| `string` 参数 | 按值传入 `BrString` | `str` |
+| `string` 返回值 | 按值返回 `BrString` | `str` |
 
-`SBString` 包含字符地址和字节长度；每个字符串始终对应一个 ABI 参数或返回值。
+`BrString` 包含字符地址和字节长度；每个字符串始终对应一个 ABI 参数或返回值。
 Go 侧的 `goString` / `cString` 与 C++ 侧的 `c_string` / `py_string` 分别封装转换，
 函数绑定只负责连接这些转换与原始 API 调用。
 

@@ -18,7 +18,7 @@ import (
 // InitSymbol is the internal void(void) entry point called when the native
 // module loads. Entering an exported Go function waits for Go initialization.
 // It is separate from target API operations and has no Python export.
-const InitSymbol = "SBInit"
+const InitSymbol = "BrInit"
 
 // Kind selects the conversion used on both sides of the boundary.
 type Kind string
@@ -84,7 +84,7 @@ func Plan(p *pyapi.Package) (*Package, error) {
 	for _, t := range p.Types {
 		w := wire[t]
 		if t.Shape == pyapi.SliceObject {
-			prefix := fmt.Sprintf("SBType%d", t.Go.ID)
+			prefix := fmt.Sprintf("BrType%d", t.Go.ID)
 			sl := &Slice{Type: w, Elem: wire[t.Elem], Len: prefix + "Len", At: prefix + "At", Set: prefix + "Set", Reslice: prefix + "Reslice", Clone: prefix + "Clone", Copy: prefix + "Copy"}
 			if t.Underlying == nil {
 				sl.New = prefix + "New"
@@ -105,9 +105,9 @@ func Plan(p *pyapi.Package) (*Package, error) {
 }
 
 func planCall(f *pyapi.Function, receiver *Type, wire map[*pyapi.Type]*Type, index int) *Operation {
-	op := &Operation{Python: f, Receiver: receiver, Symbol: fmt.Sprintf("SBCall%d", index)}
+	op := &Operation{Python: f, Receiver: receiver, Symbol: fmt.Sprintf("BrCall%d", index)}
 	if len(f.Results) > 0 {
-		op.Result = fmt.Sprintf("SBResult%d", index)
+		op.Result = fmt.Sprintf("BrResult%d", index)
 	}
 	if receiver != nil {
 		op.Params = append(op.Params, receiver)
@@ -146,7 +146,7 @@ func wireType(t *pyapi.Type, sizes types.Sizes, qualifier types.Qualifier) (*Typ
 	case info&types.IsBoolean != 0:
 		w.Kind, w.C, w.Bits = Boolean, "uint8_t", 8
 	case info&types.IsString != 0:
-		w.Kind, w.C = String, "SBString"
+		w.Kind, w.C = String, "BrString"
 	case info&types.IsFloat != 0:
 		w.Kind, w.C, w.Bits = Float, "double", bits
 		if bits == 32 {
@@ -181,7 +181,7 @@ type Slice struct {
 }
 
 const (
-	ReleaseSymbol = "SBRelease"
-	CountSymbol   = "SBHolderCount"
-	CollectSymbol = "SBCollect"
+	ReleaseSymbol = "BrRelease"
+	CountSymbol   = "BrHolderCount"
+	CollectSymbol = "BrCollect"
 )

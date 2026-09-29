@@ -26,14 +26,14 @@ public:
     Ref& operator=(const Ref&) = delete;
     Ref(Ref&& other) noexcept : id_(std::exchange(other.id_, 0)) {}
     virtual ~Ref() {
-        if (id_) SBUnPin(id_);
+        if (id_) BrUnPin(id_);
     }
     // For binding code only; never exposed to Python.
     uintptr_t handle() const { return id_; }
 };
 
 // Go string results, as in 03_str: decode strictly, then free the C copy.
-py::str py_string(SBString output) {
+py::str py_string(BrString output) {
     std::unique_ptr<char, decltype(&std::free)> owned(output.data, &std::free);
     if (!owned) {
         throw py::value_error("cannot convert Go string");
@@ -101,7 +101,7 @@ py::object define_my_named_non_struct_int(py::module_& module) {
     cls.attr("echo_non_struct_int") = py::cpp_function(
         [](py::handle self) {
             return py_string(
-                SBMyNamedNonStructIntEchoNonStructInt(my_named_non_struct_int_value(self)));
+                BrMyNamedNonStructIntEchoNonStructInt(my_named_non_struct_int_value(self)));
         },
         py::name("echo_non_struct_int"), py::is_method(cls));
     module.attr("MyNamedNonStructInt") = cls;
@@ -149,28 +149,28 @@ protected:
     using Slice::Slice;
 
 public:
-    size_t size() const override { return SBSliceIntLen(handle()); }
+    size_t size() const override { return BrSliceIntLen(handle()); }
     intptr_t get(py::ssize_t index) const {
         intptr_t value = 0;
-        if (SBSliceIntAt(handle(), element_index(index), &value) != 0) {
+        if (BrSliceIntAt(handle(), element_index(index), &value) != 0) {
             throw py::index_error("slice index out of range");
         }
         return value;
     }
     void set(py::ssize_t index, py::handle value) {
         const auto position = element_index(index);
-        if (SBSliceIntSet(handle(), position, go_int(value)) != 0) {
+        if (BrSliceIntSet(handle(), position, go_int(value)) != 0) {
             throw py::index_error("slice index out of range");
         }
     }
     Self reslice(const py::slice& range) const {
         const auto [low, high] = bounds(range);
-        return Self(SBSliceIntSlice(handle(), low, high));
+        return Self(BrSliceIntSlice(handle(), low, high));
     }
-    Self clone() const { return Self(SBSliceIntClone(handle())); }
+    Self clone() const { return Self(BrSliceIntClone(handle())); }
     py::list copy_to_py_list() const {
         std::vector<intptr_t> data(size());
-        if (SBCopySliceInt(handle(), data.data(), data.size()) != 0) {
+        if (BrCopySliceInt(handle(), data.data(), data.size()) != 0) {
             throw py::value_error("cannot copy Go slice");
         }
         py::list result;
@@ -188,7 +188,7 @@ public:
     static SliceInt from_values(const py::iterable& values) {
         std::vector<intptr_t> data;
         for (py::handle item : values) data.push_back(go_int(item));
-        return SliceInt(SBNewSliceInt(data.data(), data.size()));
+        return SliceInt(BrNewSliceInt(data.data(), data.size()));
     }
 };
 
@@ -202,12 +202,12 @@ public:
 
     // Go's MyNamedNonStructSliceInt(s).
     static MyNamedNonStructSliceInt from_slice(const SliceInt& values) {
-        return MyNamedNonStructSliceInt(SBNewMyNamedNonStructSliceInt(values.handle()));
+        return MyNamedNonStructSliceInt(BrNewMyNamedNonStructSliceInt(values.handle()));
     }
     // Go's []int(si).
-    SliceInt unname() const { return SliceInt(SBMyNamedNonStructSliceIntUnname(handle())); }
+    SliceInt unname() const { return SliceInt(BrMyNamedNonStructSliceIntUnname(handle())); }
     py::str echo_non_struct_slice_int() const {
-        return py_string(SBMyNamedNonStructSliceIntEchoNonStructSliceInt(handle()));
+        return py_string(BrMyNamedNonStructSliceIntEchoNonStructSliceInt(handle()));
     }
 };
 
@@ -241,10 +241,10 @@ protected:
 
 public:
     intptr_t basic_member_value() const {
-        return SBMyNamedSubStructGetBasicMemberValue(this->handle());
+        return BrMyNamedSubStructGetBasicMemberValue(this->handle());
     }
     void set_basic_member_value(py::handle value) {
-        SBMyNamedSubStructSetBasicMemberValue(this->handle(), go_int(value));
+        BrMyNamedSubStructSetBasicMemberValue(this->handle(), go_int(value));
     }
 };
 
@@ -256,9 +256,9 @@ public:
     MyNamedSubStruct(MyNamedSubStruct&&) noexcept = default;
 
     static MyNamedSubStruct create(py::handle basic_member_value) {
-        return MyNamedSubStruct(SBNewMyNamedSubStruct(go_int(basic_member_value)));
+        return MyNamedSubStruct(BrNewMyNamedSubStruct(go_int(basic_member_value)));
     }
-    MyNamedSubStruct copy() const { return MyNamedSubStruct(SBMyNamedSubStructCopy(handle())); }
+    MyNamedSubStruct copy() const { return MyNamedSubStruct(BrMyNamedSubStructCopy(handle())); }
     PtrMyNamedSubStruct addr() const;
 };
 
@@ -269,19 +269,19 @@ public:
 
     // Go's p := new(T); *p = v: a new variable holding a copy.
     static PtrMyNamedSubStruct from_value(const MyNamedSubStruct& value) {
-        return PtrMyNamedSubStruct(SBMyNamedSubStructCopy(value.handle()));
+        return PtrMyNamedSubStruct(BrMyNamedSubStructCopy(value.handle()));
     }
     // *p is a variable, so reading it is a view, like a struct field.
-    MyNamedSubStruct value() const { return MyNamedSubStruct(SBMyNamedSubStructAlias(handle())); }
+    MyNamedSubStruct value() const { return MyNamedSubStruct(BrMyNamedSubStructAlias(handle())); }
     void set_value(py::handle value) {
         const auto& source = wrapper_arg<MyNamedSubStruct>(value, "MyNamedSubStruct");
-        SBMyNamedSubStructStore(handle(), source.handle());
+        BrMyNamedSubStructStore(handle(), source.handle());
     }
 };
 
 // Go's &v: shares the variable.
 PtrMyNamedSubStruct MyNamedSubStruct::addr() const {
-    return PtrMyNamedSubStruct(SBMyNamedSubStructAlias(handle()));
+    return PtrMyNamedSubStruct(BrMyNamedSubStructAlias(handle()));
 }
 
 template <class Class>
@@ -300,10 +300,10 @@ protected:
 
 public:
     intptr_t basic_member_value_2() const {
-        return SBMyNamedAnomySubStructGetBasicMemberValue2(this->handle());
+        return BrMyNamedAnomySubStructGetBasicMemberValue2(this->handle());
     }
     void set_basic_member_value_2(py::handle value) {
-        SBMyNamedAnomySubStructSetBasicMemberValue2(this->handle(), go_int(value));
+        BrMyNamedAnomySubStructSetBasicMemberValue2(this->handle(), go_int(value));
     }
 };
 
@@ -315,10 +315,10 @@ public:
     MyNamedAnomySubStruct(MyNamedAnomySubStruct&&) noexcept = default;
 
     static MyNamedAnomySubStruct create(py::handle basic_member_value_2) {
-        return MyNamedAnomySubStruct(SBNewMyNamedAnomySubStruct(go_int(basic_member_value_2)));
+        return MyNamedAnomySubStruct(BrNewMyNamedAnomySubStruct(go_int(basic_member_value_2)));
     }
     MyNamedAnomySubStruct copy() const {
-        return MyNamedAnomySubStruct(SBMyNamedAnomySubStructCopy(handle()));
+        return MyNamedAnomySubStruct(BrMyNamedAnomySubStructCopy(handle()));
     }
     PtrMyNamedAnomySubStruct addr() const;
 };
@@ -329,19 +329,19 @@ public:
     PtrMyNamedAnomySubStruct(PtrMyNamedAnomySubStruct&&) noexcept = default;
 
     static PtrMyNamedAnomySubStruct from_value(const MyNamedAnomySubStruct& value) {
-        return PtrMyNamedAnomySubStruct(SBMyNamedAnomySubStructCopy(value.handle()));
+        return PtrMyNamedAnomySubStruct(BrMyNamedAnomySubStructCopy(value.handle()));
     }
     MyNamedAnomySubStruct value() const {
-        return MyNamedAnomySubStruct(SBMyNamedAnomySubStructAlias(handle()));
+        return MyNamedAnomySubStruct(BrMyNamedAnomySubStructAlias(handle()));
     }
     void set_value(py::handle value) {
         const auto& source = wrapper_arg<MyNamedAnomySubStruct>(value, "MyNamedAnomySubStruct");
-        SBMyNamedAnomySubStructStore(handle(), source.handle());
+        BrMyNamedAnomySubStructStore(handle(), source.handle());
     }
 };
 
 PtrMyNamedAnomySubStruct MyNamedAnomySubStruct::addr() const {
-    return PtrMyNamedAnomySubStruct(SBMyNamedAnomySubStructAlias(handle()));
+    return PtrMyNamedAnomySubStruct(BrMyNamedAnomySubStructAlias(handle()));
 }
 
 template <class Class>
@@ -362,52 +362,52 @@ protected:
 
 public:
     MyNamedAnomySubStruct my_named_anomy_sub_struct() const {
-        return MyNamedAnomySubStruct(SBMyNamedStructGetMyNamedAnomySubStruct(this->handle()));
+        return MyNamedAnomySubStruct(BrMyNamedStructGetMyNamedAnomySubStruct(this->handle()));
     }
     void set_my_named_anomy_sub_struct(py::handle value) {
         const auto& field = wrapper_arg<MyNamedAnomySubStruct>(value, "MyNamedAnomySubStruct");
-        SBMyNamedStructSetMyNamedAnomySubStruct(this->handle(), field.handle());
+        BrMyNamedStructSetMyNamedAnomySubStruct(this->handle(), field.handle());
     }
     // Promoted from the embedded MyNamedAnomySubStruct.
     intptr_t basic_member_value_2() const {
-        return SBMyNamedStructGetBasicMemberValue2(this->handle());
+        return BrMyNamedStructGetBasicMemberValue2(this->handle());
     }
     void set_basic_member_value_2(py::handle value) {
-        SBMyNamedStructSetBasicMemberValue2(this->handle(), go_int(value));
+        BrMyNamedStructSetBasicMemberValue2(this->handle(), go_int(value));
     }
     intptr_t basic_member_value() const {
-        return SBMyNamedStructGetBasicMemberValue(this->handle());
+        return BrMyNamedStructGetBasicMemberValue(this->handle());
     }
     void set_basic_member_value(py::handle value) {
-        SBMyNamedStructSetBasicMemberValue(this->handle(), go_int(value));
+        BrMyNamedStructSetBasicMemberValue(this->handle(), go_int(value));
     }
     // Slice fields share their backing array in both directions.
     SliceInt ref_member_value() const {
-        return SliceInt(SBMyNamedStructGetRefMemberValue(this->handle()));
+        return SliceInt(BrMyNamedStructGetRefMemberValue(this->handle()));
     }
     void set_ref_member_value(py::handle value) {
-        SBMyNamedStructSetRefMemberValue(this->handle(),
+        BrMyNamedStructSetRefMemberValue(this->handle(),
                                          wrapper_arg<SliceInt>(value, "SliceInt").handle());
     }
     py::object named_basic_member_value() const {
-        return my_named_non_struct_int(SBMyNamedStructGetNamedBasicMemberValue(this->handle()));
+        return my_named_non_struct_int(BrMyNamedStructGetNamedBasicMemberValue(this->handle()));
     }
     void set_named_basic_member_value(py::handle value) {
-        SBMyNamedStructSetNamedBasicMemberValue(this->handle(),
+        BrMyNamedStructSetNamedBasicMemberValue(this->handle(),
                                                 my_named_non_struct_int_value(value));
     }
     MyNamedSubStruct named_ref_member_value() const {
-        return MyNamedSubStruct(SBMyNamedStructGetNamedRefMemberValue(this->handle()));
+        return MyNamedSubStruct(BrMyNamedStructGetNamedRefMemberValue(this->handle()));
     }
     void set_named_ref_member_value(py::handle value) {
         const auto& field = wrapper_arg<MyNamedSubStruct>(value, "MyNamedSubStruct");
-        SBMyNamedStructSetNamedRefMemberValue(this->handle(), field.handle());
+        BrMyNamedStructSetNamedRefMemberValue(this->handle(), field.handle());
     }
 
     // T is a variable, so like *T it has both value and pointer receivers.
-    py::str echo_non_ptr() const { return py_string(SBMyNamedStructEchoNonPtr(this->handle())); }
-    py::str echo_ptr() const { return py_string(SBMyNamedStructEchoPtr(this->handle())); }
-    void inc_basic_ptr() { SBMyNamedStructIncBasicPtr(this->handle()); }
+    py::str echo_non_ptr() const { return py_string(BrMyNamedStructEchoNonPtr(this->handle())); }
+    py::str echo_ptr() const { return py_string(BrMyNamedStructEchoPtr(this->handle())); }
+    void inc_basic_ptr() { BrMyNamedStructIncBasicPtr(this->handle()); }
     MyNamedStruct inc_basic_non_ptr() const;
 };
 
@@ -431,9 +431,9 @@ public:
         const auto named_basic = my_named_non_struct_int_value(named_basic_member_value);
         const auto named_ref = optional_handle<MyNamedSubStruct>(
             named_ref_member_value, "MyNamedSubStruct");
-        return MyNamedStruct(SBNewMyNamedStruct(anomy, basic, ref, named_basic, named_ref));
+        return MyNamedStruct(BrNewMyNamedStruct(anomy, basic, ref, named_basic, named_ref));
     }
-    MyNamedStruct copy() const { return MyNamedStruct(SBMyNamedStructCopy(handle())); }
+    MyNamedStruct copy() const { return MyNamedStruct(BrMyNamedStructCopy(handle())); }
     PtrMyNamedStruct addr() const;
 };
 
@@ -443,21 +443,21 @@ public:
     PtrMyNamedStruct(PtrMyNamedStruct&&) noexcept = default;
 
     static PtrMyNamedStruct from_value(const MyNamedStruct& value) {
-        return PtrMyNamedStruct(SBMyNamedStructCopy(value.handle()));
+        return PtrMyNamedStruct(BrMyNamedStructCopy(value.handle()));
     }
-    MyNamedStruct value() const { return MyNamedStruct(SBMyNamedStructAlias(handle())); }
+    MyNamedStruct value() const { return MyNamedStruct(BrMyNamedStructAlias(handle())); }
     void set_value(py::handle value) {
-        SBMyNamedStructStore(handle(), wrapper_arg<MyNamedStruct>(value, "MyNamedStruct").handle());
+        BrMyNamedStructStore(handle(), wrapper_arg<MyNamedStruct>(value, "MyNamedStruct").handle());
     }
 };
 
 template <class Base>
 MyNamedStruct MyNamedStructMembers<Base>::inc_basic_non_ptr() const {
-    return MyNamedStruct(SBMyNamedStructIncBasicNonPtr(this->handle()));
+    return MyNamedStruct(BrMyNamedStructIncBasicNonPtr(this->handle()));
 }
 
 PtrMyNamedStruct MyNamedStruct::addr() const {
-    return PtrMyNamedStruct(SBMyNamedStructAlias(handle()));
+    return PtrMyNamedStruct(BrMyNamedStructAlias(handle()));
 }
 
 template <class Class>
@@ -484,20 +484,20 @@ Class& def_my_named_struct_members(Class& cls) {
 // Functions.
 
 py::str fn_echo_non_struct_int(py::handle i) {
-    return py_string(SBFnEchoNonStructInt(my_named_non_struct_int_value(i)));
+    return py_string(BrFnEchoNonStructInt(my_named_non_struct_int_value(i)));
 }
 
 // Only the named slice: a SliceInt needs an explicit conversion first.
 py::str fn_echo_non_struct_slice_int(const MyNamedNonStructSliceInt& si) {
-    return py_string(SBFnEchoNonStructSliceInt(si.handle()));
+    return py_string(BrFnEchoNonStructSliceInt(si.handle()));
 }
 
 py::str fn_echo_non_ptr(const MyNamedStruct& si) {
-    return py_string(SBFnEchoNonPtr(si.handle()));
+    return py_string(BrFnEchoNonPtr(si.handle()));
 }
 
 py::str ptr_fn_echo_ptr(const PtrMyNamedStruct& si) {
-    return py_string(SBPtrFnEchoPtr(si.handle()));
+    return py_string(BrPtrFnEchoPtr(si.handle()));
 }
 
 }  // namespace
@@ -587,6 +587,6 @@ PYBIND11_MODULE(_native, module) {
                py::arg("si").noconvert().none(false));
     module.def("fn_echo_non_ptr", &fn_echo_non_ptr, py::arg("si").noconvert().none(false));
     module.def("ptr_fn_echo_ptr", &ptr_fn_echo_ptr, py::arg("si").noconvert().none(false));
-    module.def("_holder_count", &SBHolderCount);
-    module.def("_collect_go", &SBCollect);
+    module.def("_holder_count", &BrHolderCount);
+    module.def("_collect_go", &BrCollect);
 }

@@ -91,19 +91,19 @@ func TestRoots(t *testing.T) {
    handle:=bridgePin(value)
    copied:=bridgeStruct(*value)
    if bridgeGet[*item](copied).next!=value {t.Error("not a shallow copy")}
-   SBRelease(copied)
+   BrRelease(copied)
    view:=bridgePin(&value.value)
-   SBRelease(handle)
+   BrRelease(handle)
    value=nil // Only the field-view handle roots the original allocation now.
    if j%25==0 {runtime.GC()}
    if *bridgeGet[*int](view)!=j {t.Error("lost rooted field")}
-   SBRelease(view)
+   BrRelease(view)
   }
  }() }
  workers.Wait()
- SBRelease(0)
+ BrRelease(0)
  if bridgePointer[*item](0)!=nil {t.Fatal("nil pointer changed")}
- if SBHolderCount()!=0 {t.Fatal("leaked roots")}
+ if BrHolderCount()!=0 {t.Fatal("leaked roots")}
 }
 
 `)

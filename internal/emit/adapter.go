@@ -16,18 +16,18 @@ package main
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
-typedef struct { char *data; size_t size; } SBString;
+typedef struct { char *data; size_t size; } BrString;
 `
 
 // adapterRuntime copies strings across the boundary.
 const adapterRuntime = `
 // bridgeString copies value into C memory owned by the caller.
-func bridgeString(value string) C.SBString {
-	return C.SBString{data: C.CString(value), size: C.size_t(len(value))}
+func bridgeString(value string) C.BrString {
+	return C.BrString{data: C.CString(value), size: C.size_t(len(value))}
 }
 
 // bridgeInput copies a borrowed C buffer into a Go string.
-func bridgeInput(value C.SBString) string {
+func bridgeInput(value C.BrString) string {
 	return string(unsafe.Slice((*byte)(unsafe.Pointer(value.data)), int(value.size)))
 }
 `

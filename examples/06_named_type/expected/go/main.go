@@ -8,7 +8,7 @@ package main
 typedef struct {
     char *data;
     size_t size;
-} SBString;
+} BrString;
 */
 import "C"
 
@@ -20,9 +20,9 @@ import (
 	"unsafe"
 )
 
-// Go string results use the SBString ABI of 03_str; C++ frees data.
-func cString(value string) C.SBString {
-	return C.SBString{data: C.CString(value), size: C.size_t(len(value))}
+// Go string results use the BrString ABI of 03_str; C++ frees data.
+func cString(value string) C.BrString {
+	return C.BrString{data: C.CString(value), size: C.size_t(len(value))}
 }
 
 // ---------------------------------------------------------------------------
@@ -52,8 +52,8 @@ func reslice[E any](id C.uintptr_t, low, high C.size_t) C.uintptr_t {
 	return Pin(value[low:high])
 }
 
-//export SBNewSliceInt
-func SBNewSliceInt(data unsafe.Pointer, size C.size_t) C.uintptr_t {
+//export BrNewSliceInt
+func BrNewSliceInt(data unsafe.Pointer, size C.size_t) C.uintptr_t {
 	if !validBuffer[int](data, size) {
 		return 0
 	}
@@ -62,13 +62,13 @@ func SBNewSliceInt(data unsafe.Pointer, size C.size_t) C.uintptr_t {
 	return Pin(value)
 }
 
-//export SBSliceIntLen
-func SBSliceIntLen(id C.uintptr_t) C.size_t {
+//export BrSliceIntLen
+func BrSliceIntLen(id C.uintptr_t) C.size_t {
 	return C.size_t(len(Get[[]int](id)))
 }
 
-//export SBCopySliceInt
-func SBCopySliceInt(id C.uintptr_t, data unsafe.Pointer, size C.size_t) C.int {
+//export BrCopySliceInt
+func BrCopySliceInt(id C.uintptr_t, data unsafe.Pointer, size C.size_t) C.int {
 	value := Get[[]int](id)
 	if uint64(size) != uint64(len(value)) || !validBuffer[int](data, size) {
 		return 1
@@ -77,8 +77,8 @@ func SBCopySliceInt(id C.uintptr_t, data unsafe.Pointer, size C.size_t) C.int {
 	return 0
 }
 
-//export SBSliceIntAt
-func SBSliceIntAt(id C.uintptr_t, index C.size_t, out unsafe.Pointer) C.int {
+//export BrSliceIntAt
+func BrSliceIntAt(id C.uintptr_t, index C.size_t, out unsafe.Pointer) C.int {
 	value := Get[[]int](id)
 	if !inRange(value, index) || out == nil {
 		return 1
@@ -87,8 +87,8 @@ func SBSliceIntAt(id C.uintptr_t, index C.size_t, out unsafe.Pointer) C.int {
 	return 0
 }
 
-//export SBSliceIntSet
-func SBSliceIntSet(id C.uintptr_t, index C.size_t, item C.intptr_t) C.int {
+//export BrSliceIntSet
+func BrSliceIntSet(id C.uintptr_t, index C.size_t, item C.intptr_t) C.int {
 	value := Get[[]int](id)
 	if !inRange(value, index) {
 		return 1
@@ -97,11 +97,11 @@ func SBSliceIntSet(id C.uintptr_t, index C.size_t, item C.intptr_t) C.int {
 	return 0
 }
 
-//export SBSliceIntClone
-func SBSliceIntClone(id C.uintptr_t) C.uintptr_t { return clone[int](id) }
+//export BrSliceIntClone
+func BrSliceIntClone(id C.uintptr_t) C.uintptr_t { return clone[int](id) }
 
-//export SBSliceIntSlice
-func SBSliceIntSlice(id C.uintptr_t, low, high C.size_t) C.uintptr_t {
+//export BrSliceIntSlice
+func BrSliceIntSlice(id C.uintptr_t, low, high C.size_t) C.uintptr_t {
 	return reslice[int](id, low, high)
 }
 
@@ -109,13 +109,13 @@ func SBSliceIntSlice(id C.uintptr_t, low, high C.size_t) C.uintptr_t {
 // MyNamedNonStructInt: a named value type crosses the ABI as its underlying
 // int (intptr_t). Only the Python class keeps the name.
 
-//export SBMyNamedNonStructIntEchoNonStructInt
-func SBMyNamedNonStructIntEchoNonStructInt(value C.intptr_t) C.SBString {
+//export BrMyNamedNonStructIntEchoNonStructInt
+func BrMyNamedNonStructIntEchoNonStructInt(value C.intptr_t) C.BrString {
 	return cString(api.MyNamedNonStructInt(value).EchoNonStructInt())
 }
 
-//export SBFnEchoNonStructInt
-func SBFnEchoNonStructInt(i C.intptr_t) C.SBString {
+//export BrFnEchoNonStructInt
+func BrFnEchoNonStructInt(i C.intptr_t) C.BrString {
 	return cString(api.FnEchoNonStructInt(api.MyNamedNonStructInt(i)))
 }
 
@@ -124,29 +124,29 @@ func SBFnEchoNonStructInt(i C.intptr_t) C.SBString {
 // indexing, reslice, clone and copy reuse the SliceInt exports. Get converts
 // to the named type only where Go needs the name.
 
-// SBNewMyNamedNonStructSliceInt is Go's MyNamedNonStructSliceInt(s): a new
+// BrNewMyNamedNonStructSliceInt is Go's MyNamedNonStructSliceInt(s): a new
 // handle that shares the backing array.
 //
-//export SBNewMyNamedNonStructSliceInt
-func SBNewMyNamedNonStructSliceInt(id C.uintptr_t) C.uintptr_t {
+//export BrNewMyNamedNonStructSliceInt
+func BrNewMyNamedNonStructSliceInt(id C.uintptr_t) C.uintptr_t {
 	return Pin(api.MyNamedNonStructSliceInt(Get[[]int](id)))
 }
 
-//export SBMyNamedNonStructSliceIntEchoNonStructSliceInt
-func SBMyNamedNonStructSliceIntEchoNonStructSliceInt(id C.uintptr_t) C.SBString {
+//export BrMyNamedNonStructSliceIntEchoNonStructSliceInt
+func BrMyNamedNonStructSliceIntEchoNonStructSliceInt(id C.uintptr_t) C.BrString {
 	return cString(Get[api.MyNamedNonStructSliceInt](id).EchoNonStructSliceInt())
 }
 
-// SBMyNamedNonStructSliceIntUnname is Go's []int(si): a new handle that shares
+// BrMyNamedNonStructSliceIntUnname is Go's []int(si): a new handle that shares
 // the backing array.
 //
-//export SBMyNamedNonStructSliceIntUnname
-func SBMyNamedNonStructSliceIntUnname(id C.uintptr_t) C.uintptr_t {
+//export BrMyNamedNonStructSliceIntUnname
+func BrMyNamedNonStructSliceIntUnname(id C.uintptr_t) C.uintptr_t {
 	return Pin([]int(Get[api.MyNamedNonStructSliceInt](id)))
 }
 
-//export SBFnEchoNonStructSliceInt
-func SBFnEchoNonStructSliceInt(si C.uintptr_t) C.SBString {
+//export BrFnEchoNonStructSliceInt
+func BrFnEchoNonStructSliceInt(si C.uintptr_t) C.BrString {
 	return cString(api.FnEchoNonStructSliceInt(Get[api.MyNamedNonStructSliceInt](si)))
 }
 
@@ -179,76 +179,76 @@ func storeStruct[T any](id, value C.uintptr_t) {
 
 // MyNamedSubStruct
 
-//export SBNewMyNamedSubStruct
-func SBNewMyNamedSubStruct(basicMemberValue C.intptr_t) C.uintptr_t {
+//export BrNewMyNamedSubStruct
+func BrNewMyNamedSubStruct(basicMemberValue C.intptr_t) C.uintptr_t {
 	return Pin(&api.MyNamedSubStruct{BasicMemberValue: int(basicMemberValue)})
 }
 
-//export SBMyNamedSubStructGetBasicMemberValue
-func SBMyNamedSubStructGetBasicMemberValue(id C.uintptr_t) C.intptr_t {
+//export BrMyNamedSubStructGetBasicMemberValue
+func BrMyNamedSubStructGetBasicMemberValue(id C.uintptr_t) C.intptr_t {
 	return C.intptr_t(Get[*api.MyNamedSubStruct](id).BasicMemberValue)
 }
 
-//export SBMyNamedSubStructSetBasicMemberValue
-func SBMyNamedSubStructSetBasicMemberValue(id C.uintptr_t, value C.intptr_t) {
+//export BrMyNamedSubStructSetBasicMemberValue
+func BrMyNamedSubStructSetBasicMemberValue(id C.uintptr_t, value C.intptr_t) {
 	Get[*api.MyNamedSubStruct](id).BasicMemberValue = int(value)
 }
 
-//export SBMyNamedSubStructCopy
-func SBMyNamedSubStructCopy(id C.uintptr_t) C.uintptr_t {
+//export BrMyNamedSubStructCopy
+func BrMyNamedSubStructCopy(id C.uintptr_t) C.uintptr_t {
 	return copyStruct[api.MyNamedSubStruct](id)
 }
 
-//export SBMyNamedSubStructAlias
-func SBMyNamedSubStructAlias(id C.uintptr_t) C.uintptr_t {
+//export BrMyNamedSubStructAlias
+func BrMyNamedSubStructAlias(id C.uintptr_t) C.uintptr_t {
 	return aliasStruct[api.MyNamedSubStruct](id)
 }
 
-//export SBMyNamedSubStructStore
-func SBMyNamedSubStructStore(id, value C.uintptr_t) {
+//export BrMyNamedSubStructStore
+func BrMyNamedSubStructStore(id, value C.uintptr_t) {
 	storeStruct[api.MyNamedSubStruct](id, value)
 }
 
 // MyNamedAnomySubStruct
 
-//export SBNewMyNamedAnomySubStruct
-func SBNewMyNamedAnomySubStruct(basicMemberValue2 C.intptr_t) C.uintptr_t {
+//export BrNewMyNamedAnomySubStruct
+func BrNewMyNamedAnomySubStruct(basicMemberValue2 C.intptr_t) C.uintptr_t {
 	return Pin(&api.MyNamedAnomySubStruct{BasicMemberValue2: int(basicMemberValue2)})
 }
 
-//export SBMyNamedAnomySubStructGetBasicMemberValue2
-func SBMyNamedAnomySubStructGetBasicMemberValue2(id C.uintptr_t) C.intptr_t {
+//export BrMyNamedAnomySubStructGetBasicMemberValue2
+func BrMyNamedAnomySubStructGetBasicMemberValue2(id C.uintptr_t) C.intptr_t {
 	return C.intptr_t(Get[*api.MyNamedAnomySubStruct](id).BasicMemberValue2)
 }
 
-//export SBMyNamedAnomySubStructSetBasicMemberValue2
-func SBMyNamedAnomySubStructSetBasicMemberValue2(id C.uintptr_t, value C.intptr_t) {
+//export BrMyNamedAnomySubStructSetBasicMemberValue2
+func BrMyNamedAnomySubStructSetBasicMemberValue2(id C.uintptr_t, value C.intptr_t) {
 	Get[*api.MyNamedAnomySubStruct](id).BasicMemberValue2 = int(value)
 }
 
-//export SBMyNamedAnomySubStructCopy
-func SBMyNamedAnomySubStructCopy(id C.uintptr_t) C.uintptr_t {
+//export BrMyNamedAnomySubStructCopy
+func BrMyNamedAnomySubStructCopy(id C.uintptr_t) C.uintptr_t {
 	return copyStruct[api.MyNamedAnomySubStruct](id)
 }
 
-//export SBMyNamedAnomySubStructAlias
-func SBMyNamedAnomySubStructAlias(id C.uintptr_t) C.uintptr_t {
+//export BrMyNamedAnomySubStructAlias
+func BrMyNamedAnomySubStructAlias(id C.uintptr_t) C.uintptr_t {
 	return aliasStruct[api.MyNamedAnomySubStruct](id)
 }
 
-//export SBMyNamedAnomySubStructStore
-func SBMyNamedAnomySubStructStore(id, value C.uintptr_t) {
+//export BrMyNamedAnomySubStructStore
+func BrMyNamedAnomySubStructStore(id, value C.uintptr_t) {
 	storeStruct[api.MyNamedAnomySubStruct](id, value)
 }
 
 // MyNamedStruct
 
-// SBNewMyNamedStruct is a keyed composite literal: struct arguments are copied
+// BrNewMyNamedStruct is a keyed composite literal: struct arguments are copied
 // into the new value, the slice argument shares its backing array. A 0 handle
 // is an omitted field and keeps its zero value (a zero struct or a nil slice).
 //
-//export SBNewMyNamedStruct
-func SBNewMyNamedStruct(
+//export BrNewMyNamedStruct
+func BrNewMyNamedStruct(
 	myNamedAnomySubStruct C.uintptr_t,
 	basicMemberValue C.intptr_t,
 	refMemberValue C.uintptr_t,
@@ -274,82 +274,82 @@ func SBNewMyNamedStruct(
 // A struct-typed field is read as a view, Go's &s.Field; writing it copies the
 // value in, Go's s.Field = v.
 
-//export SBMyNamedStructGetMyNamedAnomySubStruct
-func SBMyNamedStructGetMyNamedAnomySubStruct(id C.uintptr_t) C.uintptr_t {
+//export BrMyNamedStructGetMyNamedAnomySubStruct
+func BrMyNamedStructGetMyNamedAnomySubStruct(id C.uintptr_t) C.uintptr_t {
 	return Pin(&Get[*api.MyNamedStruct](id).MyNamedAnomySubStruct)
 }
 
-//export SBMyNamedStructSetMyNamedAnomySubStruct
-func SBMyNamedStructSetMyNamedAnomySubStruct(id C.uintptr_t, value C.uintptr_t) {
+//export BrMyNamedStructSetMyNamedAnomySubStruct
+func BrMyNamedStructSetMyNamedAnomySubStruct(id C.uintptr_t, value C.uintptr_t) {
 	Get[*api.MyNamedStruct](id).MyNamedAnomySubStruct = *Get[*api.MyNamedAnomySubStruct](value)
 }
 
 // BasicMemberValue2 is promoted from the embedded MyNamedAnomySubStruct.
 //
-//export SBMyNamedStructGetBasicMemberValue2
-func SBMyNamedStructGetBasicMemberValue2(id C.uintptr_t) C.intptr_t {
+//export BrMyNamedStructGetBasicMemberValue2
+func BrMyNamedStructGetBasicMemberValue2(id C.uintptr_t) C.intptr_t {
 	return C.intptr_t(Get[*api.MyNamedStruct](id).BasicMemberValue2)
 }
 
-//export SBMyNamedStructSetBasicMemberValue2
-func SBMyNamedStructSetBasicMemberValue2(id C.uintptr_t, value C.intptr_t) {
+//export BrMyNamedStructSetBasicMemberValue2
+func BrMyNamedStructSetBasicMemberValue2(id C.uintptr_t, value C.intptr_t) {
 	Get[*api.MyNamedStruct](id).BasicMemberValue2 = int(value)
 }
 
-//export SBMyNamedStructGetBasicMemberValue
-func SBMyNamedStructGetBasicMemberValue(id C.uintptr_t) C.intptr_t {
+//export BrMyNamedStructGetBasicMemberValue
+func BrMyNamedStructGetBasicMemberValue(id C.uintptr_t) C.intptr_t {
 	return C.intptr_t(Get[*api.MyNamedStruct](id).BasicMemberValue)
 }
 
-//export SBMyNamedStructSetBasicMemberValue
-func SBMyNamedStructSetBasicMemberValue(id C.uintptr_t, value C.intptr_t) {
+//export BrMyNamedStructSetBasicMemberValue
+func BrMyNamedStructSetBasicMemberValue(id C.uintptr_t, value C.intptr_t) {
 	Get[*api.MyNamedStruct](id).BasicMemberValue = int(value)
 }
 
 // A slice field is read and written as a slice header; arrays stay shared.
 //
-//export SBMyNamedStructGetRefMemberValue
-func SBMyNamedStructGetRefMemberValue(id C.uintptr_t) C.uintptr_t {
+//export BrMyNamedStructGetRefMemberValue
+func BrMyNamedStructGetRefMemberValue(id C.uintptr_t) C.uintptr_t {
 	return Pin(Get[*api.MyNamedStruct](id).RefMemberValue)
 }
 
-//export SBMyNamedStructSetRefMemberValue
-func SBMyNamedStructSetRefMemberValue(id C.uintptr_t, value C.uintptr_t) {
+//export BrMyNamedStructSetRefMemberValue
+func BrMyNamedStructSetRefMemberValue(id C.uintptr_t, value C.uintptr_t) {
 	Get[*api.MyNamedStruct](id).RefMemberValue = Get[[]int](value)
 }
 
-//export SBMyNamedStructGetNamedBasicMemberValue
-func SBMyNamedStructGetNamedBasicMemberValue(id C.uintptr_t) C.intptr_t {
+//export BrMyNamedStructGetNamedBasicMemberValue
+func BrMyNamedStructGetNamedBasicMemberValue(id C.uintptr_t) C.intptr_t {
 	return C.intptr_t(Get[*api.MyNamedStruct](id).NamedBasicMemberValue)
 }
 
-//export SBMyNamedStructSetNamedBasicMemberValue
-func SBMyNamedStructSetNamedBasicMemberValue(id C.uintptr_t, value C.intptr_t) {
+//export BrMyNamedStructSetNamedBasicMemberValue
+func BrMyNamedStructSetNamedBasicMemberValue(id C.uintptr_t, value C.intptr_t) {
 	Get[*api.MyNamedStruct](id).NamedBasicMemberValue = api.MyNamedNonStructInt(value)
 }
 
-//export SBMyNamedStructGetNamedRefMemberValue
-func SBMyNamedStructGetNamedRefMemberValue(id C.uintptr_t) C.uintptr_t {
+//export BrMyNamedStructGetNamedRefMemberValue
+func BrMyNamedStructGetNamedRefMemberValue(id C.uintptr_t) C.uintptr_t {
 	return Pin(&Get[*api.MyNamedStruct](id).NamedRefMemberValue)
 }
 
-//export SBMyNamedStructSetNamedRefMemberValue
-func SBMyNamedStructSetNamedRefMemberValue(id C.uintptr_t, value C.uintptr_t) {
+//export BrMyNamedStructSetNamedRefMemberValue
+func BrMyNamedStructSetNamedRefMemberValue(id C.uintptr_t, value C.uintptr_t) {
 	Get[*api.MyNamedStruct](id).NamedRefMemberValue = *Get[*api.MyNamedSubStruct](value)
 }
 
-//export SBMyNamedStructCopy
-func SBMyNamedStructCopy(id C.uintptr_t) C.uintptr_t {
+//export BrMyNamedStructCopy
+func BrMyNamedStructCopy(id C.uintptr_t) C.uintptr_t {
 	return copyStruct[api.MyNamedStruct](id)
 }
 
-//export SBMyNamedStructAlias
-func SBMyNamedStructAlias(id C.uintptr_t) C.uintptr_t {
+//export BrMyNamedStructAlias
+func BrMyNamedStructAlias(id C.uintptr_t) C.uintptr_t {
 	return aliasStruct[api.MyNamedStruct](id)
 }
 
-//export SBMyNamedStructStore
-func SBMyNamedStructStore(id, value C.uintptr_t) {
+//export BrMyNamedStructStore
+func BrMyNamedStructStore(id, value C.uintptr_t) {
 	storeStruct[api.MyNamedStruct](id, value)
 }
 
@@ -357,48 +357,48 @@ func SBMyNamedStructStore(id, value C.uintptr_t) {
 // its writes are visible through every Ref to the same struct. MyNamedStruct
 // and PtrMyNamedStruct both call these.
 
-//export SBMyNamedStructEchoNonPtr
-func SBMyNamedStructEchoNonPtr(id C.uintptr_t) C.SBString {
+//export BrMyNamedStructEchoNonPtr
+func BrMyNamedStructEchoNonPtr(id C.uintptr_t) C.BrString {
 	return cString(Get[*api.MyNamedStruct](id).EchoNonPtr())
 }
 
-//export SBMyNamedStructEchoPtr
-func SBMyNamedStructEchoPtr(id C.uintptr_t) C.SBString {
+//export BrMyNamedStructEchoPtr
+func BrMyNamedStructEchoPtr(id C.uintptr_t) C.BrString {
 	return cString(Get[*api.MyNamedStruct](id).EchoPtr())
 }
 
-//export SBMyNamedStructIncBasicPtr
-func SBMyNamedStructIncBasicPtr(id C.uintptr_t) {
+//export BrMyNamedStructIncBasicPtr
+func BrMyNamedStructIncBasicPtr(id C.uintptr_t) {
 	Get[*api.MyNamedStruct](id).IncBasicPtr()
 }
 
-//export SBMyNamedStructIncBasicNonPtr
-func SBMyNamedStructIncBasicNonPtr(id C.uintptr_t) C.uintptr_t {
+//export BrMyNamedStructIncBasicNonPtr
+func BrMyNamedStructIncBasicNonPtr(id C.uintptr_t) C.uintptr_t {
 	result := Get[*api.MyNamedStruct](id).IncBasicNonPtr()
 	return Pin(&result)
 }
 
 // Functions: a T parameter receives a copy, a *T parameter the pointer.
 
-//export SBFnEchoNonPtr
-func SBFnEchoNonPtr(si C.uintptr_t) C.SBString {
+//export BrFnEchoNonPtr
+func BrFnEchoNonPtr(si C.uintptr_t) C.BrString {
 	return cString(api.FnEchoNonPtr(*Get[*api.MyNamedStruct](si)))
 }
 
-//export SBPtrFnEchoPtr
-func SBPtrFnEchoPtr(si C.uintptr_t) C.SBString {
+//export BrPtrFnEchoPtr
+func BrPtrFnEchoPtr(si C.uintptr_t) C.BrString {
 	return cString(api.PtrFnEchoPtr(Get[*api.MyNamedStruct](si)))
 }
 
-//export SBUnPin
-func SBUnPin(id C.uintptr_t) { UnPin(id) }
+//export BrUnPin
+func BrUnPin(id C.uintptr_t) { UnPin(id) }
 
 // Internal test diagnostics.
 //
-//export SBHolderCount
-func SBHolderCount() C.size_t { return C.size_t(holderCount()) }
+//export BrHolderCount
+func BrHolderCount() C.size_t { return C.size_t(holderCount()) }
 
-//export SBCollect
-func SBCollect() { runtime.GC() }
+//export BrCollect
+func BrCollect() { runtime.GC() }
 
 func main() {}

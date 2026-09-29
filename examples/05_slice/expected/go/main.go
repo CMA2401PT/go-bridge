@@ -46,8 +46,8 @@ func reslice[E any](id C.uintptr_t, low, high C.size_t) C.uintptr_t {
 
 // []int: elements are copied by value; Go int is intptr_t on the C side.
 
-//export SBNewSliceInt
-func SBNewSliceInt(data unsafe.Pointer, size C.size_t) C.uintptr_t {
+//export BrNewSliceInt
+func BrNewSliceInt(data unsafe.Pointer, size C.size_t) C.uintptr_t {
 	if !validBuffer[int](data, size) {
 		return 0
 	}
@@ -56,13 +56,13 @@ func SBNewSliceInt(data unsafe.Pointer, size C.size_t) C.uintptr_t {
 	return Pin(value)
 }
 
-//export SBSliceIntLen
-func SBSliceIntLen(id C.uintptr_t) C.size_t {
+//export BrSliceIntLen
+func BrSliceIntLen(id C.uintptr_t) C.size_t {
 	return C.size_t(len(Get[[]int](id)))
 }
 
-//export SBCopySliceInt
-func SBCopySliceInt(id C.uintptr_t, data unsafe.Pointer, size C.size_t) C.int {
+//export BrCopySliceInt
+func BrCopySliceInt(id C.uintptr_t, data unsafe.Pointer, size C.size_t) C.int {
 	value := Get[[]int](id)
 	if uint64(size) != uint64(len(value)) || !validBuffer[int](data, size) {
 		return 1
@@ -71,8 +71,8 @@ func SBCopySliceInt(id C.uintptr_t, data unsafe.Pointer, size C.size_t) C.int {
 	return 0
 }
 
-//export SBSliceIntAt
-func SBSliceIntAt(id C.uintptr_t, index C.size_t, out unsafe.Pointer) C.int {
+//export BrSliceIntAt
+func BrSliceIntAt(id C.uintptr_t, index C.size_t, out unsafe.Pointer) C.int {
 	value := Get[[]int](id)
 	if !inRange(value, index) || out == nil {
 		return 1
@@ -81,8 +81,8 @@ func SBSliceIntAt(id C.uintptr_t, index C.size_t, out unsafe.Pointer) C.int {
 	return 0
 }
 
-//export SBSliceIntSet
-func SBSliceIntSet(id C.uintptr_t, index C.size_t, item C.intptr_t) C.int {
+//export BrSliceIntSet
+func BrSliceIntSet(id C.uintptr_t, index C.size_t, item C.intptr_t) C.int {
 	value := Get[[]int](id)
 	if !inRange(value, index) {
 		return 1
@@ -91,18 +91,18 @@ func SBSliceIntSet(id C.uintptr_t, index C.size_t, item C.intptr_t) C.int {
 	return 0
 }
 
-//export SBSliceIntClone
-func SBSliceIntClone(id C.uintptr_t) C.uintptr_t { return clone[int](id) }
+//export BrSliceIntClone
+func BrSliceIntClone(id C.uintptr_t) C.uintptr_t { return clone[int](id) }
 
-//export SBSliceIntSlice
-func SBSliceIntSlice(id C.uintptr_t, low, high C.size_t) C.uintptr_t {
+//export BrSliceIntSlice
+func BrSliceIntSlice(id C.uintptr_t, low, high C.size_t) C.uintptr_t {
 	return reslice[int](id, low, high)
 }
 
 // [][]int: elements are Go-owned []int values, exchanged as SliceInt handles.
 
-//export SBNewSliceSliceInt
-func SBNewSliceSliceInt(ids unsafe.Pointer, size C.size_t) C.uintptr_t {
+//export BrNewSliceSliceInt
+func BrNewSliceSliceInt(ids unsafe.Pointer, size C.size_t) C.uintptr_t {
 	if !validBuffer[C.uintptr_t](ids, size) {
 		return 0
 	}
@@ -118,16 +118,16 @@ func SBNewSliceSliceInt(ids unsafe.Pointer, size C.size_t) C.uintptr_t {
 	return Pin(value)
 }
 
-//export SBSliceSliceIntLen
-func SBSliceSliceIntLen(id C.uintptr_t) C.size_t {
+//export BrSliceSliceIntLen
+func BrSliceSliceIntLen(id C.uintptr_t) C.size_t {
 	return C.size_t(len(Get[[][]int](id)))
 }
 
-// SBSliceSliceIntItems pins every element as a new SliceInt handle. The caller
+// BrSliceSliceIntItems pins every element as a new SliceInt handle. The caller
 // owns all written handles and must release each one.
 //
-//export SBSliceSliceIntItems
-func SBSliceSliceIntItems(id C.uintptr_t, ids unsafe.Pointer, size C.size_t) C.int {
+//export BrSliceSliceIntItems
+func BrSliceSliceIntItems(id C.uintptr_t, ids unsafe.Pointer, size C.size_t) C.int {
 	value := Get[[][]int](id)
 	if uint64(size) != uint64(len(value)) || !validBuffer[C.uintptr_t](ids, size) {
 		return 1
@@ -139,11 +139,11 @@ func SBSliceSliceIntItems(id C.uintptr_t, ids unsafe.Pointer, size C.size_t) C.i
 	return 0
 }
 
-// SBSliceSliceIntAt pins the element header as a new SliceInt handle that
+// BrSliceSliceIntAt pins the element header as a new SliceInt handle that
 // shares the element's backing array. It returns 0 when index is out of range.
 //
-//export SBSliceSliceIntAt
-func SBSliceSliceIntAt(id C.uintptr_t, index C.size_t) C.uintptr_t {
+//export BrSliceSliceIntAt
+func BrSliceSliceIntAt(id C.uintptr_t, index C.size_t) C.uintptr_t {
 	value := Get[[][]int](id)
 	if !inRange(value, index) {
 		return 0
@@ -151,11 +151,11 @@ func SBSliceSliceIntAt(id C.uintptr_t, index C.size_t) C.uintptr_t {
 	return Pin(value[index])
 }
 
-// SBSliceSliceIntSet stores the header of an existing SliceInt; the outer
+// BrSliceSliceIntSet stores the header of an existing SliceInt; the outer
 // backing array then keeps that element's array reachable.
 //
-//export SBSliceSliceIntSet
-func SBSliceSliceIntSet(id C.uintptr_t, index C.size_t, item C.uintptr_t) C.int {
+//export BrSliceSliceIntSet
+func BrSliceSliceIntSet(id C.uintptr_t, index C.size_t, item C.uintptr_t) C.int {
 	value := Get[[][]int](id)
 	if !inRange(value, index) || item == 0 {
 		return 1
@@ -166,33 +166,33 @@ func SBSliceSliceIntSet(id C.uintptr_t, index C.size_t, item C.uintptr_t) C.int 
 
 // Clone is shallow like slices.Clone: elements still share their arrays.
 //
-//export SBSliceSliceIntClone
-func SBSliceSliceIntClone(id C.uintptr_t) C.uintptr_t { return clone[[]int](id) }
+//export BrSliceSliceIntClone
+func BrSliceSliceIntClone(id C.uintptr_t) C.uintptr_t { return clone[[]int](id) }
 
-//export SBSliceSliceIntSlice
-func SBSliceSliceIntSlice(id C.uintptr_t, low, high C.size_t) C.uintptr_t {
+//export BrSliceSliceIntSlice
+func BrSliceSliceIntSlice(id C.uintptr_t, low, high C.size_t) C.uintptr_t {
 	return reslice[[]int](id, low, high)
 }
 
-//export SBConcatA
-func SBConcatA(a C.uintptr_t, b C.uintptr_t) C.uintptr_t {
+//export BrConcatA
+func BrConcatA(a C.uintptr_t, b C.uintptr_t) C.uintptr_t {
 	return Pin(api.ConcatA(Get[[]int](a), Get[[]int](b)))
 }
 
-//export SBConcatB
-func SBConcatB(a C.uintptr_t, b C.uintptr_t) C.uintptr_t {
+//export BrConcatB
+func BrConcatB(a C.uintptr_t, b C.uintptr_t) C.uintptr_t {
 	return Pin(api.ConcatB(Get[[][]int](a), Get[[][]int](b)))
 }
 
-//export SBUnPin
-func SBUnPin(id C.uintptr_t) { UnPin(id) }
+//export BrUnPin
+func BrUnPin(id C.uintptr_t) { UnPin(id) }
 
 // Internal test diagnostics.
 //
-//export SBHolderCount
-func SBHolderCount() C.size_t { return C.size_t(holderCount()) }
+//export BrHolderCount
+func BrHolderCount() C.size_t { return C.size_t(holderCount()) }
 
-//export SBCollect
-func SBCollect() { runtime.GC() }
+//export BrCollect
+func BrCollect() { runtime.GC() }
 
 func main() {}

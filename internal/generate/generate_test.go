@@ -234,8 +234,8 @@ import os
 from pathlib import Path
 import init_contract as b
 assert Path(os.environ["GO_BRIDGE_INIT_MARKER"]).read_text() == "ready"
-assert not hasattr(b, "SBInit")
-assert not hasattr(b._native, "SBInit")
+assert not hasattr(b, "BrInit")
+assert not hasattr(b._native, "BrInit")
 `+tc.check)
 		})
 	}

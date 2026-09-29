@@ -7,8 +7,8 @@
 
 ## 模块加载与 Go 初始化
 
-每个生成库都导出内部入口 `void SBInit(void)`，名称由 `abi.InitSymbol` 统一定义。
-`__init__.py` 总是导入 `_native`，C++ 在模块初始化时调用 SBInit。函数体为空；进入
+每个生成库都导出内部入口 `void BrInit(void)`，名称由 `abi.InitSymbol` 统一定义。
+`__init__.py` 总是导入 `_native`，C++ 在模块初始化时调用 BrInit。函数体为空；进入
 cgo 导出的 Go 函数会等待 Go runtime 和包初始化完成。它不重复运行目标包的 init，
 不向 Python 公开，也不增加每次业务调用的步骤。
 
@@ -29,7 +29,7 @@ Go init 中未恢复的 panic 会在 Python 导入过程中终止进程，仍不
 | uint8…uint64 | uint8_t…uint64_t | int，按无符号范围检查 |
 | int / uint / uintptr | intptr_t / uintptr_t / uintptr_t | int，使用目标平台字宽 |
 | float32 / float64 | float / double | 输入接受 float 或 int；输出 float |
-| string | SBString，包含 char* 和 size_t | 输入必须是 str；输出严格 UTF-8 解码 |
+| string | BrString，包含 char* 和 size_t | 输入必须是 str；输出严格 UTF-8 解码 |
 
 整数检查用 `PyLong_Check`，因此 bool 也可传给整数参数；整数越界抛 OverflowError，
 类型不符抛 TypeError。整数参数不接受 float、字符串或仅提供 `__index__` 的其他类型。
@@ -40,19 +40,19 @@ Go init 中未恢复的 panic 会在 Python 导入过程中终止进程，仍不
 
 ## 结果结构是一份所有权单位
 
-有返回值的操作返回自己的 SBResultN 结构，其中只有 r0、r1 等结果字段；无返回值的
+有返回值的操作返回自己的 BrResultN 结构，其中只有 r0、r1 等结果字段；无返回值的
 操作使用 void ABI，不生成结果结构。Python 侧零个结果映射成 None，一个结果直接返回，
 多个结果按顺序构造 tuple。ABI 不传输 panic 状态或消息。
 
 | 资源 | 分配/提供方 | 使用期限 | 释放方 |
 | --- | --- | --- | --- |
-| 输入 SBString.data | Python 的 UTF-8 缓存 | 同步调用期间借用 | Python 管理，Go/C++ 不释放 |
+| 输入 BrString.data | Python 的 UTF-8 缓存 | 同步调用期间借用 | Python 管理，Go/C++ 不释放 |
 | `bridgeInput` 得到的 Go string | Go 复制输入 | 原包可以保留该 string | Go GC |
-| 普通结果 SBString.data | `bridgeString` 调用 C.CString | 到结果转换结束或失败 | C++ owner 的 std::free |
+| 普通结果 BrString.data | `bridgeString` 调用 C.CString | 到结果转换结束或失败 | C++ owner 的 std::free |
 | 数值结果 | 按值返回 | 随结果结构 | 无需释放 |
 
 字符串长度是字节数，解码不依赖终止 NUL，所以内嵌 `\0` 不会截断字符串。空字符串
-也遵循相同的分配/释放协议。SBString 只是内部传输结构，不是向任意外部 C 调用者开放
+也遵循相同的分配/释放协议。BrString 只是内部传输结构，不是向任意外部 C 调用者开放
 的安全缓冲区接口；当前适配层信任生成的 C++ 传入有效指针和长度。
 
 [cppOwner](../internal/emit/bindings.go) 为每种结果结构生成一个 owner。它在任何 Python
@@ -97,7 +97,7 @@ Go 内部整数运算溢出遵循 Go 语义，不会因上述输入检查而自�
 
 ## ABI 的稳定范围
 
-生成 Go 动态库与 C++ 扩展必须配套重建。SBCallN 是当前操作顺序的内部名字，增删函数
+生成 Go 动态库与 C++ 扩展必须配套重建。BrCallN 是当前操作顺序的内部名字，增删函数
 可能使序号变化，没有独立动态库的版本协商或长期二进制兼容协议。C++ 使用 cgo 本次构建
 产生的头文件，不另维护一份手写头文件。
 

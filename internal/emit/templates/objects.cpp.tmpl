@@ -7,7 +7,7 @@ struct Ref {
     Ref(const Ref&) = delete;
     Ref& operator=(const Ref&) = delete;
     Ref(Ref&& other) noexcept : handle(std::exchange(other.handle, 0)) {}
-    ~Ref() { SBRelease(handle); }
+    ~Ref() { BrRelease(handle); }
 };
 struct Slice : Ref { using Ref::Ref; };
 struct Ptr : Ref { using Ref::Ref; };
@@ -28,8 +28,8 @@ template<typename T> uintptr_t handle_arg(py::handle value) {
 }
 
 template<typename T> void release_value(T) {}
-inline void release_string(SBString value) { std::free(value.data); }
-inline void release_handle(uintptr_t value) { SBRelease(value); }
+inline void release_string(BrString value) { std::free(value.data); }
+inline void release_handle(uintptr_t value) { BrRelease(value); }
 
 // Own every element before any Python result is built. Zeroed entries carry
 // no ownership; conversions transfer individual handles by exchanging with 0.

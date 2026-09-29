@@ -23,7 +23,7 @@ public:
     Ref& operator=(const Ref&) = delete;
     Ref(Ref&& other) noexcept : id_(std::exchange(other.id_, 0)) {}
     virtual ~Ref() {
-        if (id_) SBUnPin(id_);
+        if (id_) BrUnPin(id_);
     }
     // For binding code only; never exposed to Python.
     uintptr_t handle() const { return id_; }
@@ -75,31 +75,31 @@ public:
     static SliceInt from_values(const py::iterable& values) {
         std::vector<intptr_t> data;
         for (py::handle item : values) data.push_back(go_int(item));
-        return SliceInt(SBNewSliceInt(data.data(), data.size()));
+        return SliceInt(BrNewSliceInt(data.data(), data.size()));
     }
 
-    size_t size() const override { return SBSliceIntLen(handle()); }
+    size_t size() const override { return BrSliceIntLen(handle()); }
     intptr_t get(py::ssize_t index) const {
         intptr_t value = 0;
-        if (SBSliceIntAt(handle(), element_index(index), &value) != 0) {
+        if (BrSliceIntAt(handle(), element_index(index), &value) != 0) {
             throw py::index_error("slice index out of range");
         }
         return value;
     }
     void set(py::ssize_t index, py::handle value) {
         const auto position = element_index(index);
-        if (SBSliceIntSet(handle(), position, go_int(value)) != 0) {
+        if (BrSliceIntSet(handle(), position, go_int(value)) != 0) {
             throw py::index_error("slice index out of range");
         }
     }
     SliceInt reslice(const py::slice& range) const {
         const auto [low, high] = bounds(range);
-        return SliceInt(SBSliceIntSlice(handle(), low, high));
+        return SliceInt(BrSliceIntSlice(handle(), low, high));
     }
-    SliceInt clone() const { return SliceInt(SBSliceIntClone(handle())); }
+    SliceInt clone() const { return SliceInt(BrSliceIntClone(handle())); }
     py::list copy_to_py_list() const {
         std::vector<intptr_t> data(size());
-        if (SBCopySliceInt(handle(), data.data(), data.size()) != 0) {
+        if (BrCopySliceInt(handle(), data.data(), data.size()) != 0) {
             throw py::value_error("cannot copy Go slice");
         }
         py::list result;
@@ -126,29 +126,29 @@ public:
             elements.push_back(py::reinterpret_borrow<py::object>(item));
             ids.push_back(item.cast<const SliceInt&>().handle());
         }
-        return SliceSliceInt(SBNewSliceSliceInt(ids.data(), ids.size()));
+        return SliceSliceInt(BrNewSliceSliceInt(ids.data(), ids.size()));
     }
 
-    size_t size() const override { return SBSliceSliceIntLen(handle()); }
+    size_t size() const override { return BrSliceSliceIntLen(handle()); }
     // Each read pins the element header again; the new SliceInt shares its array.
     SliceInt get(py::ssize_t index) const {
-        return SliceInt(SBSliceSliceIntAt(handle(), element_index(index)));
+        return SliceInt(BrSliceSliceIntAt(handle(), element_index(index)));
     }
     void set(py::ssize_t index, const SliceInt& value) {
-        if (SBSliceSliceIntSet(handle(), element_index(index), value.handle()) != 0) {
+        if (BrSliceSliceIntSet(handle(), element_index(index), value.handle()) != 0) {
             throw py::index_error("slice index out of range");
         }
     }
     SliceSliceInt reslice(const py::slice& range) const {
         const auto [low, high] = bounds(range);
-        return SliceSliceInt(SBSliceSliceIntSlice(handle(), low, high));
+        return SliceSliceInt(BrSliceSliceIntSlice(handle(), low, high));
     }
-    SliceSliceInt clone() const { return SliceSliceInt(SBSliceSliceIntClone(handle())); }
+    SliceSliceInt clone() const { return SliceSliceInt(BrSliceSliceIntClone(handle())); }
     py::list copy_to_py_list() const {
         std::vector<uintptr_t> ids(size());
         std::vector<SliceInt> elements;
         elements.reserve(ids.size());
-        if (SBSliceSliceIntItems(handle(), ids.data(), ids.size()) != 0) {
+        if (BrSliceSliceIntItems(handle(), ids.data(), ids.size()) != 0) {
             throw py::value_error("cannot copy Go slice");
         }
         // Take ownership of every new handle before any Python allocation.
@@ -160,11 +160,11 @@ public:
 };
 
 SliceInt concat_a(const SliceInt& a, const SliceInt& b) {
-    return SliceInt(SBConcatA(a.handle(), b.handle()));
+    return SliceInt(BrConcatA(a.handle(), b.handle()));
 }
 
 SliceSliceInt concat_b(const SliceSliceInt& a, const SliceSliceInt& b) {
-    return SliceSliceInt(SBConcatB(a.handle(), b.handle()));
+    return SliceSliceInt(BrConcatB(a.handle(), b.handle()));
 }
 
 }  // namespace
@@ -196,6 +196,6 @@ PYBIND11_MODULE(_native, module) {
                py::arg("b").noconvert().none(false));
     module.def("concat_b", &concat_b, py::arg("a").noconvert().none(false),
                py::arg("b").noconvert().none(false));
-    module.def("_holder_count", &SBHolderCount);
-    module.def("_collect_go", &SBCollect);
+    module.def("_holder_count", &BrHolderCount);
+    module.def("_collect_go", &BrCollect);
 }

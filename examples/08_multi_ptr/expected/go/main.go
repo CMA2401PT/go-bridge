@@ -8,7 +8,7 @@ package main
 typedef struct {
     char *data;
     size_t size;
-} SBString;
+} BrString;
 */
 import "C"
 
@@ -17,9 +17,9 @@ import (
 	"runtime"
 )
 
-// Go string results use the SBString ABI of 03_str; C++ frees data.
-func cString(value string) C.SBString {
-	return C.SBString{data: C.CString(value), size: C.size_t(len(value))}
+// Go string results use the BrString ABI of 03_str; C++ frees data.
+func cString(value string) C.BrString {
+	return C.BrString{data: C.CString(value), size: C.size_t(len(value))}
 }
 
 // newPtr is Go's p := new(T); *p = value, as in 07_ptr_basic.
@@ -43,51 +43,51 @@ func loadPointer[E any, P ~*E](id C.uintptr_t) C.uintptr_t {
 // *int, **int and ***int. Only ***int appears in G; the type closure adds
 // the other two so that every .value has a class.
 
-//export SBNewPtrInt
-func SBNewPtrInt(value C.intptr_t) C.uintptr_t { return newPtr(int(value)) }
+//export BrNewPtrInt
+func BrNewPtrInt(value C.intptr_t) C.uintptr_t { return newPtr(int(value)) }
 
-//export SBPtrIntLoad
-func SBPtrIntLoad(id C.uintptr_t) C.intptr_t { return C.intptr_t(*Get[*int](id)) }
+//export BrPtrIntLoad
+func BrPtrIntLoad(id C.uintptr_t) C.intptr_t { return C.intptr_t(*Get[*int](id)) }
 
-//export SBPtrIntStore
-func SBPtrIntStore(id C.uintptr_t, value C.intptr_t) { *Get[*int](id) = int(value) }
+//export BrPtrIntStore
+func BrPtrIntStore(id C.uintptr_t, value C.intptr_t) { *Get[*int](id) = int(value) }
 
 // A pointer-to-pointer is built from a pointer: the new variable holds a
 // copy of that pointer, so both refer to the same target.
 //
-//export SBNewPtrPtrInt
-func SBNewPtrPtrInt(p C.uintptr_t) C.uintptr_t { return newPtr(Get[*int](p)) }
+//export BrNewPtrPtrInt
+func BrNewPtrPtrInt(p C.uintptr_t) C.uintptr_t { return newPtr(Get[*int](p)) }
 
-//export SBPtrPtrIntLoad
-func SBPtrPtrIntLoad(id C.uintptr_t) C.uintptr_t { return loadPointer[int, *int](id) }
+//export BrPtrPtrIntLoad
+func BrPtrPtrIntLoad(id C.uintptr_t) C.uintptr_t { return loadPointer[int, *int](id) }
 
-//export SBPtrPtrIntStore
-func SBPtrPtrIntStore(id, p C.uintptr_t) { *Get[**int](id) = Get[*int](p) }
+//export BrPtrPtrIntStore
+func BrPtrPtrIntStore(id, p C.uintptr_t) { *Get[**int](id) = Get[*int](p) }
 
-//export SBNewPtrPtrPtrInt
-func SBNewPtrPtrPtrInt(pp C.uintptr_t) C.uintptr_t { return newPtr(Get[**int](pp)) }
+//export BrNewPtrPtrPtrInt
+func BrNewPtrPtrPtrInt(pp C.uintptr_t) C.uintptr_t { return newPtr(Get[**int](pp)) }
 
-//export SBPtrPtrPtrIntLoad
-func SBPtrPtrPtrIntLoad(id C.uintptr_t) C.uintptr_t { return loadPointer[*int, **int](id) }
+//export BrPtrPtrPtrIntLoad
+func BrPtrPtrPtrIntLoad(id C.uintptr_t) C.uintptr_t { return loadPointer[*int, **int](id) }
 
-//export SBPtrPtrPtrIntStore
-func SBPtrPtrPtrIntStore(id, pp C.uintptr_t) { *Get[***int](id) = Get[**int](pp) }
+//export BrPtrPtrPtrIntStore
+func BrPtrPtrPtrIntStore(id, pp C.uintptr_t) { *Get[***int](id) = Get[**int](pp) }
 
 // ---------------------------------------------------------------------------
 // IntPtr: a named pointer. Its handle pins an IntPtr value; conversions to
 // and from *int share the variable.
 
-//export SBNewIntPtr
-func SBNewIntPtr(p C.uintptr_t) C.uintptr_t { return Pin(api.IntPtr(Get[*int](p))) }
+//export BrNewIntPtr
+func BrNewIntPtr(p C.uintptr_t) C.uintptr_t { return Pin(api.IntPtr(Get[*int](p))) }
 
-//export SBIntPtrUnname
-func SBIntPtrUnname(id C.uintptr_t) C.uintptr_t { return Pin((*int)(Get[api.IntPtr](id))) }
+//export BrIntPtrUnname
+func BrIntPtrUnname(id C.uintptr_t) C.uintptr_t { return Pin((*int)(Get[api.IntPtr](id))) }
 
-//export SBIntPtrLoad
-func SBIntPtrLoad(id C.uintptr_t) C.intptr_t { return C.intptr_t(*Get[api.IntPtr](id)) }
+//export BrIntPtrLoad
+func BrIntPtrLoad(id C.uintptr_t) C.intptr_t { return C.intptr_t(*Get[api.IntPtr](id)) }
 
-//export SBIntPtrStore
-func SBIntPtrStore(id C.uintptr_t, value C.intptr_t) { *Get[api.IntPtr](id) = int(value) }
+//export BrIntPtrStore
+func BrIntPtrStore(id C.uintptr_t, value C.intptr_t) { *Get[api.IntPtr](id) = int(value) }
 
 // ---------------------------------------------------------------------------
 // Structs, as in 06: T and *T have separate Python classes whose handles both
@@ -108,34 +108,34 @@ func storeStruct[T any](id, value C.uintptr_t) { *Get[*T](id) = *Get[*T](value) 
 // ---------------------------------------------------------------------------
 // Counter and Inner appear only as Box fields; the closure generates them.
 
-//export SBCounterEcho
-func SBCounterEcho(value C.intptr_t) C.SBString { return cString(api.Counter(value).Echo()) }
+//export BrCounterEcho
+func BrCounterEcho(value C.intptr_t) C.BrString { return cString(api.Counter(value).Echo()) }
 
-//export SBNewInner
-func SBNewInner(n C.intptr_t) C.uintptr_t { return Pin(&api.Inner{N: int(n)}) }
+//export BrNewInner
+func BrNewInner(n C.intptr_t) C.uintptr_t { return Pin(&api.Inner{N: int(n)}) }
 
-//export SBInnerGetN
-func SBInnerGetN(id C.uintptr_t) C.intptr_t { return C.intptr_t(Get[*api.Inner](id).N) }
+//export BrInnerGetN
+func BrInnerGetN(id C.uintptr_t) C.intptr_t { return C.intptr_t(Get[*api.Inner](id).N) }
 
-//export SBInnerSetN
-func SBInnerSetN(id C.uintptr_t, n C.intptr_t) { Get[*api.Inner](id).N = int(n) }
+//export BrInnerSetN
+func BrInnerSetN(id C.uintptr_t, n C.intptr_t) { Get[*api.Inner](id).N = int(n) }
 
-//export SBInnerCopy
-func SBInnerCopy(id C.uintptr_t) C.uintptr_t { return copyStruct[api.Inner](id) }
+//export BrInnerCopy
+func BrInnerCopy(id C.uintptr_t) C.uintptr_t { return copyStruct[api.Inner](id) }
 
-//export SBInnerAlias
-func SBInnerAlias(id C.uintptr_t) C.uintptr_t { return aliasStruct[api.Inner](id) }
+//export BrInnerAlias
+func BrInnerAlias(id C.uintptr_t) C.uintptr_t { return aliasStruct[api.Inner](id) }
 
-//export SBInnerStore
-func SBInnerStore(id, value C.uintptr_t) { storeStruct[api.Inner](id, value) }
+//export BrInnerStore
+func BrInnerStore(id, value C.uintptr_t) { storeStruct[api.Inner](id, value) }
 
 // ---------------------------------------------------------------------------
 // Box and *Box, as in 06_named_type: both handles pin a *Box.
 
 // A 0 inner handle keeps the zero value.
 //
-//export SBNewBox
-func SBNewBox(count C.intptr_t, inner C.uintptr_t) C.uintptr_t {
+//export BrNewBox
+func BrNewBox(count C.intptr_t, inner C.uintptr_t) C.uintptr_t {
 	value := &api.Box{Count: api.Counter(count)}
 	if inner != 0 {
 		value.Inner = *Get[*api.Inner](inner)
@@ -143,80 +143,80 @@ func SBNewBox(count C.intptr_t, inner C.uintptr_t) C.uintptr_t {
 	return Pin(value)
 }
 
-//export SBBoxGetCount
-func SBBoxGetCount(id C.uintptr_t) C.intptr_t { return C.intptr_t(Get[*api.Box](id).Count) }
+//export BrBoxGetCount
+func BrBoxGetCount(id C.uintptr_t) C.intptr_t { return C.intptr_t(Get[*api.Box](id).Count) }
 
-//export SBBoxSetCount
-func SBBoxSetCount(id C.uintptr_t, count C.intptr_t) {
+//export BrBoxSetCount
+func BrBoxSetCount(id C.uintptr_t, count C.intptr_t) {
 	Get[*api.Box](id).Count = api.Counter(count)
 }
 
-//export SBBoxGetInner
-func SBBoxGetInner(id C.uintptr_t) C.uintptr_t { return Pin(&Get[*api.Box](id).Inner) }
+//export BrBoxGetInner
+func BrBoxGetInner(id C.uintptr_t) C.uintptr_t { return Pin(&Get[*api.Box](id).Inner) }
 
-//export SBBoxSetInner
-func SBBoxSetInner(id, inner C.uintptr_t) { Get[*api.Box](id).Inner = *Get[*api.Inner](inner) }
+//export BrBoxSetInner
+func BrBoxSetInner(id, inner C.uintptr_t) { Get[*api.Box](id).Inner = *Get[*api.Inner](inner) }
 
-//export SBBoxEcho
-func SBBoxEcho(id C.uintptr_t) C.SBString { return cString(Get[*api.Box](id).Echo()) }
+//export BrBoxEcho
+func BrBoxEcho(id C.uintptr_t) C.BrString { return cString(Get[*api.Box](id).Echo()) }
 
-//export SBBoxInc
-func SBBoxInc(id C.uintptr_t) { Get[*api.Box](id).Inc() }
+//export BrBoxInc
+func BrBoxInc(id C.uintptr_t) { Get[*api.Box](id).Inc() }
 
-//export SBBoxCopy
-func SBBoxCopy(id C.uintptr_t) C.uintptr_t { return copyStruct[api.Box](id) }
+//export BrBoxCopy
+func BrBoxCopy(id C.uintptr_t) C.uintptr_t { return copyStruct[api.Box](id) }
 
-//export SBBoxAlias
-func SBBoxAlias(id C.uintptr_t) C.uintptr_t { return aliasStruct[api.Box](id) }
+//export BrBoxAlias
+func BrBoxAlias(id C.uintptr_t) C.uintptr_t { return aliasStruct[api.Box](id) }
 
-//export SBBoxStore
-func SBBoxStore(id, value C.uintptr_t) { storeStruct[api.Box](id, value) }
+//export BrBoxStore
+func BrBoxStore(id, value C.uintptr_t) { storeStruct[api.Box](id, value) }
 
 // **Box. Its target is a *Box, a PtrBox handle; storing one copies the
 // pointer, not the struct. **Box has an empty method set in Go.
 //
-//export SBNewPtrPtrBox
-func SBNewPtrPtrBox(box C.uintptr_t) C.uintptr_t { return newPtr(Get[*api.Box](box)) }
+//export BrNewPtrPtrBox
+func BrNewPtrPtrBox(box C.uintptr_t) C.uintptr_t { return newPtr(Get[*api.Box](box)) }
 
-//export SBPtrPtrBoxLoad
-func SBPtrPtrBoxLoad(id C.uintptr_t) C.uintptr_t { return loadPointer[api.Box, *api.Box](id) }
+//export BrPtrPtrBoxLoad
+func BrPtrPtrBoxLoad(id C.uintptr_t) C.uintptr_t { return loadPointer[api.Box, *api.Box](id) }
 
-//export SBPtrPtrBoxStore
-func SBPtrPtrBoxStore(id, box C.uintptr_t) { *Get[**api.Box](id) = Get[*api.Box](box) }
+//export BrPtrPtrBoxStore
+func BrPtrPtrBoxStore(id, box C.uintptr_t) { *Get[**api.Box](id) = Get[*api.Box](box) }
 
 // ---------------------------------------------------------------------------
 // Functions.
 
-//export SBIncPPP
-func SBIncPPP(p C.uintptr_t) { api.IncPPP(Get[***int](p)) }
+//export BrIncPPP
+func BrIncPPP(p C.uintptr_t) { api.IncPPP(Get[***int](p)) }
 
-//export SBEchoPPP
-func SBEchoPPP(p C.uintptr_t) C.SBString { return cString(api.EchoPPP(Get[***int](p))) }
+//export BrEchoPPP
+func BrEchoPPP(p C.uintptr_t) C.BrString { return cString(api.EchoPPP(Get[***int](p))) }
 
-//export SBRetarget
-func SBRetarget(pp, p C.uintptr_t) { api.Retarget(Get[**int](pp), Get[*int](p)) }
+//export BrRetarget
+func BrRetarget(pp, p C.uintptr_t) { api.Retarget(Get[**int](pp), Get[*int](p)) }
 
-//export SBClear
-func SBClear(pp C.uintptr_t) { api.Clear(Get[**int](pp)) }
+//export BrClear
+func BrClear(pp C.uintptr_t) { api.Clear(Get[**int](pp)) }
 
-//export SBIncIntPtr
-func SBIncIntPtr(p C.uintptr_t) { api.IncIntPtr(Get[api.IntPtr](p)) }
+//export BrIncIntPtr
+func BrIncIntPtr(p C.uintptr_t) { api.IncIntPtr(Get[api.IntPtr](p)) }
 
-//export SBIncBoxPP
-func SBIncBoxPP(pp C.uintptr_t) { api.IncBoxPP(Get[**api.Box](pp)) }
+//export BrIncBoxPP
+func BrIncBoxPP(pp C.uintptr_t) { api.IncBoxPP(Get[**api.Box](pp)) }
 
 // ---------------------------------------------------------------------------
 // Lifecycle.
 
-//export SBUnPin
-func SBUnPin(id C.uintptr_t) { UnPin(id) }
+//export BrUnPin
+func BrUnPin(id C.uintptr_t) { UnPin(id) }
 
 // Internal test diagnostics.
 //
-//export SBHolderCount
-func SBHolderCount() C.size_t { return C.size_t(holderCount()) }
+//export BrHolderCount
+func BrHolderCount() C.size_t { return C.size_t(holderCount()) }
 
-//export SBCollect
-func SBCollect() { runtime.GC() }
+//export BrCollect
+func BrCollect() { runtime.GC() }
 
 func main() {}

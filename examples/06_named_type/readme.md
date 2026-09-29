@@ -51,7 +51,7 @@ q = bridge.PtrMyNamedStruct(v)          # Go 的 q := new(T); *q = v，复制
 | Go | C ABI | Python |
 | --- | --- | --- |
 | `MyNamedNonStructInt` 参数/返回值/字段 | `intptr_t`，同 `int` | `MyNamedNonStructInt(int)` |
-| 方法 `EchoNonStructInt` | `SBMyNamedNonStructIntEchoNonStructInt(intptr_t) → SBString` | 实例方法 |
+| 方法 `EchoNonStructInt` | `BrMyNamedNonStructIntEchoNonStructInt(intptr_t) → BrString` | 实例方法 |
 | `int(i)` | 无 | `unname() -> int` |
 
 值类型没有需要 Go 管理的生命周期，不进入 holder，也不继承 Ref。Python 类是
@@ -79,8 +79,8 @@ Go int 参数使用同样的范围和类型检查，默认值 0 是 Go 零值；
 
 | Go | ABI | Python |
 | --- | --- | --- |
-| `MyNamedNonStructSliceInt(s)` | `SBNewMyNamedNonStructSliceInt`，新句柄共享底层数组 | 构造函数，只接受 `SliceInt` |
-| `[]int(si)` | `SBMyNamedNonStructSliceIntUnname`，新句柄共享底层数组 | `unname() -> SliceInt` |
+| `MyNamedNonStructSliceInt(s)` | `BrNewMyNamedNonStructSliceInt`，新句柄共享底层数组 | 构造函数，只接受 `SliceInt` |
+| `[]int(si)` | `BrMyNamedNonStructSliceIntUnname`，新句柄共享底层数组 | `unname() -> SliceInt` |
 | `si.EchoNonStructSliceInt()` | `Get[MyNamedNonStructSliceInt](id)` 后调用 | 实例方法 |
 | `si[i:j]`、`slices.Clone(si)` | 复用 SliceInt 导出，C++ 包装为命名类 | 结果仍为命名类型 |
 
@@ -149,7 +149,7 @@ slice 参数**共享**底层数组。
 | 指针接收者 `func (s *T) M()` | `p.M()` | 修改对所有别名与视图可见 |
 | 参数 `T` | `*p` 复制后传入 | 只接受 `T` |
 | 参数 `*T` | 直接传 `p` | 只接受 `PtrT`，见下节 |
-| `c := v` | `SB<T>Copy` | `copy.copy(v)`，浅拷贝，slice 字段仍共享数组 |
+| `c := v` | `Br<T>Copy` | `copy.copy(v)`，浅拷贝，slice 字段仍共享数组 |
 
 `G.go` 为此增加了 `IncBasicPtr` 与 `IncBasicNonPtr`，因为原有的 echo 方法不修改
 接收者，无法区分两种语义。值接收者返回的 `MyNamedStruct` 被 Pin 为新的 `*T`。
@@ -166,10 +166,10 @@ Python 变量赋值只产生别名，两个名字指向同一个 Go 变量，而
 
 | Go | ABI | Python |
 | --- | --- | --- |
-| `p := &v` | `SB<T>Alias`，新句柄，同一个 `*T` | `v.addr() -> PtrT`，共享 |
-| `p := new(T); *p = v` | `SB<T>Copy` | `PtrT(v)`、`PtrT.from_value(v)`，复制 |
-| `*p`（可寻址） | `SB<T>Alias` | `p.value -> T`，视图，与读 struct 字段相同 |
-| `*p = v` | `SB<T>Store` | `p.value = v`，复制 |
+| `p := &v` | `Br<T>Alias`，新句柄，同一个 `*T` | `v.addr() -> PtrT`，共享 |
+| `p := new(T); *p = v` | `Br<T>Copy` | `PtrT(v)`、`PtrT.from_value(v)`，复制 |
+| `*p`（可寻址） | `Br<T>Alias` | `p.value -> T`，视图，与读 struct 字段相同 |
+| `*p = v` | `Br<T>Store` | `p.value = v`，复制 |
 | `p.F`、`p.M()` | 与 `T` 相同 | `PtrT` 有 `T` 的全部字段与方法 |
 
 - 为什么分开：Go 中 `T` 与 `*T` 是不同类型，赋给 `any`、type switch、实现接口时都
@@ -183,7 +183,7 @@ Python 变量赋值只产生别名，两个名字指向同一个 Go 变量，而
 
 ## 所有权与边界
 
-- 命名值类型只按值复制；其余包装对象析构时只调用通用 `SBUnPin`。
+- 命名值类型只按值复制；其余包装对象析构时只调用通用 `BrUnPin`。
 - struct 视图、slice 字段读取与值接收者结果都是新的 Pin，遵守“一个 Pin 对应
   一个 Ref”；Go 值中从不保存句柄，不存在跨边界引用环。
 - 本例的 `PtrT` 永远非 nil；nil 指针的返回和参数、指针字段见 09。

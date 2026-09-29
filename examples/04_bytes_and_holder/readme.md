@@ -34,7 +34,7 @@ Ref 在 Python 中可用于类型标注和 isinstance，但不能由用户直接
 close、closed、上下文管理、复制所有权或 pickle 接口。
 
 Python 变量赋值产生的是同一个包装对象的别名。最后一个引用消失后，C++ 的
-Ref 析构调用通用 `SBUnPin`。C++ 禁止复制 Ref，允许移动；移动后旧对象不再通知
+Ref 析构调用通用 `BrUnPin`。C++ 禁止复制 Ref，允许移动；移动后旧对象不再通知
 释放。这也保护了返回包装对象时的所有权，避免两次释放同一个句柄。
 
 ## Go 的 Pin / Get / UnPin
@@ -85,15 +85,15 @@ Python 绑定保持 GIL，传入对象在整个调用期间存活，保证 Get �
 
 | 操作 | ABI | 行为 |
 | --- | --- | --- |
-| 构造 SliceBytes | SBNewBytes(外部地址, 长度) → uintptr_t | C.GoBytes 复制到 Go，再 Pin |
-| 调用 Go 函数 | SBEchoBytes(uintptr_t) → uintptr_t | Get[[]byte]、调用原函数、Pin 返回值 |
-| 查询长度 | SBBytesLen(uintptr_t) → size_t | Go 读取切片长度 |
-| 显式复制 | SBCopyBytes(句柄, Python 缓冲区, 长度) | Go 同步填充新的 Python bytes |
-| 通知释放 | SBUnPin(uintptr_t) | 通用 UnPin，与 bytes 类型无关 |
+| 构造 SliceBytes | BrNewBytes(外部地址, 长度) → uintptr_t | C.GoBytes 复制到 Go，再 Pin |
+| 调用 Go 函数 | BrEchoBytes(uintptr_t) → uintptr_t | Get[[]byte]、调用原函数、Pin 返回值 |
+| 查询长度 | BrBytesLen(uintptr_t) → size_t | Go 读取切片长度 |
+| 显式复制 | BrCopyBytes(句柄, Python 缓冲区, 长度) | Go 同步填充新的 Python bytes |
+| 通知释放 | BrUnPin(uintptr_t) | 通用 UnPin，与 bytes 类型无关 |
 
 每个原始 Go []byte 参数/返回值对应一个句柄。构造和复制是专用传输辅助函数，
 带外部缓冲区和长度。C++ Ref 内部只有句柄，不保存 Go 数组地址或长度，也不再
-使用 SBBuffer。字符和任意二进制数据都可保留，包括空值和内嵌 NUL。
+使用 BrBuffer。字符和任意二进制数据都可保留，包括空值和内嵌 NUL。
 
 C.GoBytes 的输入长度受 C.int 范围限制。复制时只借用 Python 新分配且尚未发布
 的缓冲区，Go 不保存这个地址。返回值在显式复制前都保存在 Go 中；原始函数内部

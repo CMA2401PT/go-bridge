@@ -66,15 +66,15 @@ func TestConcurrentIndependentRefs(t *testing.T) {
 }
 
 func TestInvalidInputBuffer(t *testing.T) {
-	if SBNewBytes(nil, 1) != 0 {
+	if BrNewBytes(nil, 1) != 0 {
 		t.Fatal("invalid external input accepted")
 	}
-	id := SBNewBytes(nil, 0)
-	defer SBUnPin(id)
-	if id == 0 || SBBytesLen(id) != 0 || SBCopyBytes(id, nil, 0) != 0 {
+	id := BrNewBytes(nil, 0)
+	defer BrUnPin(id)
+	if id == 0 || BrBytesLen(id) != 0 || BrCopyBytes(id, nil, 0) != 0 {
 		t.Fatal("empty slice rejected")
 	}
-	if SBCopyBytes(id, nil, 1) == 0 {
+	if BrCopyBytes(id, nil, 1) == 0 {
 		t.Fatal("invalid copy buffer accepted")
 	}
 }

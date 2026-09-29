@@ -27,14 +27,14 @@ func bridgePointer[T any](handle C.uintptr_t) T {
     if handle == 0 { var zero T; return zero }
     return bridgeGet[T](handle)
 }
-//export SBRelease
-func SBRelease(handle C.uintptr_t) {
+//export BrRelease
+func BrRelease(handle C.uintptr_t) {
     if handle == 0 { return }
     cgo.Handle(handle).Delete()
     bridgeRoots.Add(-1)
 }
-//export SBHolderCount
-func SBHolderCount() C.int64_t { return C.int64_t(bridgeRoots.Load()) }
-//export SBCollect
-func SBCollect() { runtime.GC() }
+//export BrHolderCount
+func BrHolderCount() C.int64_t { return C.int64_t(bridgeRoots.Load()) }
+//export BrCollect
+func BrCollect() { runtime.GC() }
 `

@@ -131,11 +131,11 @@ Shape 区分内建值、命名标量、slice、struct 和 pointer；ByteSlice �
 `Type` 保存 `Kind`、C 类型名、还原 Go 值时的类型名与位宽，并引用 Python 节点。
 位宽来自加载目标包时的 `types.Sizes`，不依据 Python 类型名猜测。
 
-`abi.InitSymbol` 固定为 SBInit，表示模块加载时调用的内部 void(void) 初始化入口。
+`abi.InitSymbol` 固定为 BrInit，表示模块加载时调用的内部 void(void) 初始化入口。
 它不来自目标包的公开声明，不属于 Python 函数，也不占用业务操作的序号。
 
-每个 `Operation` 对应一个原 Go 函数或选定的方法；方法额外带 Receiver，保存参数和返回类型、`SBCallN` 符号及
-`SBResultN` 结果结构名（仅有返回值时）；无返回值时 Result 为空，对应 void ABI。
+每个 `Operation` 对应一个原 Go 函数或选定的方法；方法额外带 Receiver，保存参数和返回类型、`BrCallN` 符号及
+`BrResultN` 结果结构名（仅有返回值时）；无返回值时 Result 为空，对应 void ABI。
 序号先分配给包级函数，再按类型闭包顺序分配给方法，不依据源文件声明顺序。
 相同输入可重复生成；在前面插入函数会改变后续序号，因此没有跨版本二进制兼容承诺。
 

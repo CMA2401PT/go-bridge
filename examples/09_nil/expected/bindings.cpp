@@ -25,7 +25,7 @@ public:
     Ref& operator=(const Ref&) = delete;
     Ref(Ref&& other) noexcept : id_(std::exchange(other.id_, 0)) {}
     virtual ~Ref() {
-        if (id_) SBUnPin(id_);
+        if (id_) BrUnPin(id_);
     }
     // For binding code only; never exposed to Python.
     uintptr_t handle() const { return id_; }
@@ -39,7 +39,7 @@ uintptr_t allocated(uintptr_t id) {
 }
 
 // Go string results, as in 03_str: decode strictly, then free the C copy.
-py::str py_string(SBString output) {
+py::str py_string(BrString output) {
     std::unique_ptr<char, decltype(&std::free)> owned(output.data, &std::free);
     if (!owned) {
         throw py::value_error("cannot convert Go string");
@@ -71,7 +71,7 @@ py::handle go_panic;
 
 template <class Call>
 auto go_call(Call call) {
-    SBString panicked{nullptr, 0};
+    BrString panicked{nullptr, 0};
     auto raise_if_panicked = [&panicked] {
         if (!panicked.data) return;
         const py::str message = py_string(panicked);
@@ -85,7 +85,7 @@ auto go_call(Call call) {
         auto result = call(&panicked);
         if (panicked.data) {
             // A string result is still owned C memory; free it before raising.
-            if constexpr (std::is_same_v<decltype(result), SBString>) std::free(result.data);
+            if constexpr (std::is_same_v<decltype(result), BrString>) std::free(result.data);
             raise_if_panicked();
         }
         return result;
@@ -121,15 +121,15 @@ public:
     PtrInt(PtrInt&&) noexcept = default;
 
     static PtrInt from_value(py::handle value) {
-        return PtrInt(allocated(SBNewPtrInt(go_int(value))));
+        return PtrInt(allocated(BrNewPtrInt(go_int(value))));
     }
 
     intptr_t value() const {
-        return go_call([&](SBString* p) { return SBPtrIntLoad(handle(), p); });
+        return go_call([&](BrString* p) { return BrPtrIntLoad(handle(), p); });
     }
     void set_value(py::handle value) {
         const auto v = go_int(value);
-        go_call([&](SBString* p) { SBPtrIntStore(handle(), v, p); });
+        go_call([&](BrString* p) { BrPtrIntStore(handle(), v, p); });
     }
 };
 
@@ -148,25 +148,25 @@ protected:
 
 public:
     intptr_t value() const {
-        return go_call([&](SBString* p) { return SBListGetValue(this->handle(), p); });
+        return go_call([&](BrString* p) { return BrListGetValue(this->handle(), p); });
     }
     void set_value(py::handle value) {
         const auto v = go_int(value);
-        go_call([&](SBString* p) { SBListSetValue(this->handle(), v, p); });
+        go_call([&](BrString* p) { BrListSetValue(this->handle(), v, p); });
     }
     // The pointer held in the field: may be nil, and shares the list.
     PtrList next() const;
     void set_next(py::handle value);
 
     intptr_t len() const {
-        return go_call([&](SBString* p) { return SBListLen(this->handle(), p); });
+        return go_call([&](BrString* p) { return BrListLen(this->handle(), p); });
     }
     PtrList push(py::handle v) const;
     intptr_t first() const {
-        return go_call([&](SBString* p) { return SBListFirst(this->handle(), p); });
+        return go_call([&](BrString* p) { return BrListFirst(this->handle(), p); });
     }
     intptr_t head() const {
-        return go_call([&](SBString* p) { return SBListHead(this->handle(), p); });
+        return go_call([&](BrString* p) { return BrListHead(this->handle(), p); });
     }
 };
 
@@ -186,43 +186,43 @@ public:
 
     // Go's p := new(List); *p = v.
     static PtrList from_value(const List& value) {
-        return PtrList(allocated(SBListCopy(value.handle())));
+        return PtrList(allocated(BrListCopy(value.handle())));
     }
     // Go's *p, a view of the variable; GoPanic on nil.
     List target() const {
-        return List(go_call([&](SBString* p) { return SBPtrListLoad(handle(), p); }));
+        return List(go_call([&](BrString* p) { return BrPtrListLoad(handle(), p); }));
     }
     void set_target(py::handle value) {
         const auto& source = wrapper_arg<List>(value, "List");
-        go_call([&](SBString* p) { SBPtrListStore(handle(), source.handle(), p); });
+        go_call([&](BrString* p) { BrPtrListStore(handle(), source.handle(), p); });
     }
 };
 
 template <class Base>
 PtrList ListMembers<Base>::next() const {
-    return PtrList(go_call([&](SBString* p) { return SBListGetNext(this->handle(), p); }));
+    return PtrList(go_call([&](BrString* p) { return BrListGetNext(this->handle(), p); }));
 }
 
 template <class Base>
 void ListMembers<Base>::set_next(py::handle value) {
     const auto& tail = wrapper_arg<PtrList>(value, "PtrList");
-    go_call([&](SBString* p) { SBListSetNext(this->handle(), tail.handle(), p); });
+    go_call([&](BrString* p) { BrListSetNext(this->handle(), tail.handle(), p); });
 }
 
 template <class Base>
 PtrList ListMembers<Base>::push(py::handle v) const {
     const auto item = go_int(v);
-    return PtrList(go_call([&](SBString* p) { return SBListPush(this->handle(), item, p); }));
+    return PtrList(go_call([&](BrString* p) { return BrListPush(this->handle(), item, p); }));
 }
 
 List List::create(py::handle value, py::handle next) {
     const auto v = go_int(value);
     const auto& tail = wrapper_arg<PtrList>(next, "PtrList");
-    return List(SBNewList(v, tail.handle()));
+    return List(BrNewList(v, tail.handle()));
 }
 
 // Go's &v.
-PtrList List::addr() const { return PtrList(allocated(SBListAddr(handle()))); }
+PtrList List::addr() const { return PtrList(allocated(BrListAddr(handle()))); }
 
 template <class Class>
 Class& def_list_members(Class& cls) {
@@ -242,22 +242,22 @@ Class& def_list_members(Class& cls) {
 
 PtrList find(const PtrList& l, py::handle v) {
     const auto item = go_int(v);
-    return PtrList(go_call([&](SBString* p) { return SBFind(l.handle(), item, p); }));
+    return PtrList(go_call([&](BrString* p) { return BrFind(l.handle(), item, p); }));
 }
 
 py::str deref(const PtrInt& p) {
-    return py_string(go_call([&](SBString* out) { return SBDeref(p.handle(), out); }));
+    return py_string(go_call([&](BrString* out) { return BrDeref(p.handle(), out); }));
 }
 
 PtrInt maybe_int(py::handle ok) {
     if (!PyBool_Check(ok.ptr())) throw py::type_error("expected a bool");
     const uint8_t value = ok.ptr() == Py_True ? 1 : 0;
-    return PtrInt(go_call([&](SBString* p) { return SBMaybeInt(value, p); }));
+    return PtrInt(go_call([&](BrString* p) { return BrMaybeInt(value, p); }));
 }
 
 intptr_t must_positive(py::handle v) {
     const auto value = go_int(v);
-    return go_call([&](SBString* p) { return SBMustPositive(value, p); });
+    return go_call([&](BrString* p) { return BrMustPositive(value, p); });
 }
 
 }  // namespace
@@ -292,6 +292,6 @@ PYBIND11_MODULE(_native, module) {
     module.def("deref", &deref, py::arg("p").noconvert().none(false));
     module.def("maybe_int", &maybe_int, py::arg("ok"));
     module.def("must_positive", &must_positive, py::arg("v"));
-    module.def("_holder_count", &SBHolderCount);
-    module.def("_collect_go", &SBCollect);
+    module.def("_holder_count", &BrHolderCount);
+    module.def("_collect_go", &BrCollect);
 }

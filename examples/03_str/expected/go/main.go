@@ -7,7 +7,7 @@ package main
 typedef struct {
     char *data;
     size_t size;
-} SBString;
+} BrString;
 */
 import "C"
 
@@ -16,7 +16,7 @@ import (
 	"math"
 )
 
-func goString(value C.SBString) (string, bool) {
+func goString(value C.BrString) (string, bool) {
 	if uint64(value.size) > math.MaxInt32 || (value.data == nil && value.size != 0) {
 		return "", false
 	}
@@ -24,15 +24,15 @@ func goString(value C.SBString) (string, bool) {
 	return C.GoStringN(value.data, C.int(value.size)), true
 }
 
-func cString(value string) C.SBString {
-	return C.SBString{data: C.CString(value), size: C.size_t(len(value))}
+func cString(value string) C.BrString {
+	return C.BrString{data: C.CString(value), size: C.size_t(len(value))}
 }
 
-//export SBEchoString
-func SBEchoString(input C.SBString) C.SBString {
+//export BrEchoString
+func BrEchoString(input C.BrString) C.BrString {
 	value, ok := goString(input)
 	if !ok {
-		return C.SBString{}
+		return C.BrString{}
 	}
 	return cString(api.RecvAndReturn(value))
 }

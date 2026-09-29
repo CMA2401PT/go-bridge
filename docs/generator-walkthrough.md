@@ -88,17 +88,17 @@ def pair(n: _builtins.int, s: _builtins.str, f: _builtins.float) -> _builtins.tu
 
 ## 第三步：ABI 操作
 
-[abi.Plan](../internal/abi/model.go) 为这个唯一的函数分配 SBCall0/SBResult0。相关 C
+[abi.Plan](../internal/abi/model.go) 为这个唯一的函数分配 BrCall0/BrResult0。相关 C
 声明的含义如下；实际头文件由后续 cgo 构建产生：
 
 ```c
-typedef struct { char *data; size_t size; } SBString;
+typedef struct { char *data; size_t size; } BrString;
 typedef struct {
-    SBString r0;
+    BrString r0;
     uint8_t r1;
-} SBResult0;
+} BrResult0;
 
-SBResult0 SBCall0(intptr_t a0, SBString a1, float a2);
+BrResult0 BrCall0(intptr_t a0, BrString a1, float a2);
 ```
 
 Go int 的具体范围由目标尺寸决定；bool 通过 uint8_t 传输。返回的第一个字符串拥有
@@ -109,7 +109,7 @@ C 缓冲区，第二个 bool 没有资源所有权。结果不携带 panic 信�
 [goOperation](../internal/emit/adapter.go) 生成的导出签名和正常调用核心是：
 
 ```go
-func SBCall0(a0 C.intptr_t, a1 C.SBString, a2 C.float) (out C.SBResult0)
+func BrCall0(a0 C.intptr_t, a1 C.BrString, a2 C.float) (out C.BrResult0)
 // 函数体内：
 r0, r1 := api.Pair(int(a0), bridgeInput(a1), float32(a2))
 out.r0 = bridgeString(string(r0))
@@ -122,12 +122,12 @@ if r1 {
 
 [cppFunction](../internal/emit/bindings.go) 注册 Python 名字 pair，先调用
 `integer_arg<intptr_t>`、`string_arg`、`float_arg<float>` 转换三个输入，然后调用
-`SBCall0`。正常返回的结果立即放入 `OwnedSBResult0`，再构造两个元素的 tuple。
+`BrCall0`。正常返回的结果立即放入 `OwnedBrResult0`，再构造两个元素的 tuple。
 函数退出或转换中途抛出 Python 异常时，owner 析构都释放结果字符串。
 
 `pythonSource` 导入 `_native` 并重新导出 pair，定义 Text alias 与 `__all__`。
-即使包中只有 alias、没有函数，也会加载 `_native`。C++ 模块初始化调用内部 SBInit，
-等待目标 Go 包初始化完成；该入口不占用 SBCallN 序号，也不公开到 Python。
+即使包中只有 alias、没有函数，也会加载 `_native`。C++ 模块初始化调用内部 BrInit，
+等待目标 Go 包初始化完成；该入口不占用 BrCallN 序号，也不公开到 Python。
 `Files` 汇总上述产物并格式化 Go 源码；`publish` 最后写入输出目录。
 
 ## 编译后的调用
@@ -138,8 +138,8 @@ if r1 {
 ```text
 Python 参数
   → C++ 类型/范围检查，借用字符串的 UTF-8 缓冲区
-  → SBCall0，Go 复制字符串后调用原始 Pair
-  → Go 分配 C 结果字符串，返回 SBResult0
+  → BrCall0，Go 复制字符串后调用原始 Pair
+  → Go 分配 C 结果字符串，返回 BrResult0
   → C++ 严格 UTF-8 解码并构造 tuple
   → owner 释放 C 缓冲区，Python 持有自己的返回对象
 ```

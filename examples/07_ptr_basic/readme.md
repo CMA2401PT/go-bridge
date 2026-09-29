@@ -46,8 +46,8 @@ assert s.value.copy_to_py_list() == [1, 2]
 
 | Go | C ABI | Python |
 | --- | --- | --- |
-| `p := new(T); *p = v` | `SBNewPtr<T>(v)` | `PtrT(v)`、`PtrT.from_value(v)`、`v.ptr()` |
-| `v := *p` / `*p = v` | `SBPtr<T>Load` / `SBPtr<T>Store` | `p.value` 属性 |
+| `p := new(T); *p = v` | `BrNewPtr<T>(v)` | `PtrT(v)`、`PtrT.from_value(v)`、`v.ptr()` |
+| `v := *p` / `*p = v` | `BrPtr<T>Load` / `BrPtr<T>Store` | `p.value` 属性 |
 
 - 三种构造是同一个操作：分配新变量，把值复制进去，相当于对副本取地址 `&v`，
   指针类型由 `v` 的类型决定，所以只接受自己的值类。`PtrInt` 与

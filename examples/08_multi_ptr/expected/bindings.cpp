@@ -25,14 +25,14 @@ public:
     Ref& operator=(const Ref&) = delete;
     Ref(Ref&& other) noexcept : id_(std::exchange(other.id_, 0)) {}
     virtual ~Ref() {
-        if (id_) SBUnPin(id_);
+        if (id_) BrUnPin(id_);
     }
     // For binding code only; never exposed to Python.
     uintptr_t handle() const { return id_; }
 };
 
 // Go string results, as in 03_str: decode strictly, then free the C copy.
-py::str py_string(SBString output) {
+py::str py_string(BrString output) {
     std::unique_ptr<char, decltype(&std::free)> owned(output.data, &std::free);
     if (!owned) {
         throw py::value_error("cannot convert Go string");
@@ -91,10 +91,10 @@ public:
     explicit PtrInt(uintptr_t id) : Ptr(id) {}
     PtrInt(PtrInt&&) noexcept = default;
 
-    static PtrInt from_value(py::handle value) { return PtrInt(SBNewPtrInt(go_int(value))); }
+    static PtrInt from_value(py::handle value) { return PtrInt(BrNewPtrInt(go_int(value))); }
 
-    intptr_t value() const { return SBPtrIntLoad(handle()); }
-    void set_value(py::handle value) { SBPtrIntStore(handle(), go_int(value)); }
+    intptr_t value() const { return BrPtrIntLoad(handle()); }
+    void set_value(py::handle value) { BrPtrIntStore(handle(), go_int(value)); }
     PtrPtrInt ptr() const;
 };
 
@@ -105,12 +105,12 @@ public:
     PtrPtrInt(PtrPtrInt&&) noexcept = default;
 
     static PtrPtrInt from_value(py::handle value) {
-        return PtrPtrInt(SBNewPtrPtrInt(wrapper_arg<PtrInt>(value, "PtrInt").handle()));
+        return PtrPtrInt(BrNewPtrPtrInt(wrapper_arg<PtrInt>(value, "PtrInt").handle()));
     }
 
-    PtrInt value() const { return pointer_target<PtrInt>(SBPtrPtrIntLoad(handle())); }
+    PtrInt value() const { return pointer_target<PtrInt>(BrPtrPtrIntLoad(handle())); }
     void set_value(py::handle value) {
-        SBPtrPtrIntStore(handle(), wrapper_arg<PtrInt>(value, "PtrInt").handle());
+        BrPtrPtrIntStore(handle(), wrapper_arg<PtrInt>(value, "PtrInt").handle());
     }
     PtrPtrPtrInt ptr() const;
 };
@@ -123,17 +123,17 @@ public:
 
     static PtrPtrPtrInt from_value(py::handle value) {
         return PtrPtrPtrInt(
-            SBNewPtrPtrPtrInt(wrapper_arg<PtrPtrInt>(value, "PtrPtrInt").handle()));
+            BrNewPtrPtrPtrInt(wrapper_arg<PtrPtrInt>(value, "PtrPtrInt").handle()));
     }
 
-    PtrPtrInt value() const { return pointer_target<PtrPtrInt>(SBPtrPtrPtrIntLoad(handle())); }
+    PtrPtrInt value() const { return pointer_target<PtrPtrInt>(BrPtrPtrPtrIntLoad(handle())); }
     void set_value(py::handle value) {
-        SBPtrPtrPtrIntStore(handle(), wrapper_arg<PtrPtrInt>(value, "PtrPtrInt").handle());
+        BrPtrPtrPtrIntStore(handle(), wrapper_arg<PtrPtrInt>(value, "PtrPtrInt").handle());
     }
 };
 
-PtrPtrInt PtrInt::ptr() const { return PtrPtrInt(SBNewPtrPtrInt(handle())); }
-PtrPtrPtrInt PtrPtrInt::ptr() const { return PtrPtrPtrInt(SBNewPtrPtrPtrInt(handle())); }
+PtrPtrInt PtrInt::ptr() const { return PtrPtrInt(BrNewPtrPtrInt(handle())); }
+PtrPtrPtrInt PtrPtrInt::ptr() const { return PtrPtrPtrInt(BrNewPtrPtrPtrInt(handle())); }
 
 // IntPtr: a named pointer (type IntPtr *int). It converts to and from PtrInt
 // explicitly, sharing the variable. Go allows *p but no methods on it.
@@ -143,12 +143,12 @@ public:
     IntPtr(IntPtr&&) noexcept = default;
 
     // Go's IntPtr(p).
-    static IntPtr from_ptr(const PtrInt& p) { return IntPtr(SBNewIntPtr(p.handle())); }
+    static IntPtr from_ptr(const PtrInt& p) { return IntPtr(BrNewIntPtr(p.handle())); }
     // Go's (*int)(p).
-    PtrInt unname() const { return PtrInt(SBIntPtrUnname(handle())); }
+    PtrInt unname() const { return PtrInt(BrIntPtrUnname(handle())); }
 
-    intptr_t value() const { return SBIntPtrLoad(handle()); }
-    void set_value(py::handle value) { SBIntPtrStore(handle(), go_int(value)); }
+    intptr_t value() const { return BrIntPtrLoad(handle()); }
+    void set_value(py::handle value) { BrIntPtrStore(handle(), go_int(value)); }
 };
 
 // ---------------------------------------------------------------------------
@@ -180,7 +180,7 @@ py::object define_counter(py::module_& module) {
         [](py::handle self) { return counter_value(self); },
         py::name("unname"), py::is_method(cls));
     cls.attr("echo") = py::cpp_function(
-        [](py::handle self) { return py_string(SBCounterEcho(counter_value(self))); },
+        [](py::handle self) { return py_string(BrCounterEcho(counter_value(self))); },
         py::name("echo"), py::is_method(cls));
     module.attr("Counter") = cls;
     counter = cls;
@@ -199,8 +199,8 @@ protected:
     explicit InnerMembers(uintptr_t id) : Base(id) {}
 
 public:
-    intptr_t n() const { return SBInnerGetN(this->handle()); }
-    void set_n(py::handle value) { SBInnerSetN(this->handle(), go_int(value)); }
+    intptr_t n() const { return BrInnerGetN(this->handle()); }
+    void set_n(py::handle value) { BrInnerSetN(this->handle(), go_int(value)); }
 };
 
 class PtrInner;
@@ -210,7 +210,7 @@ public:
     explicit Inner(uintptr_t id) : InnerMembers(id) {}
     Inner(Inner&&) noexcept = default;
 
-    static Inner create(py::handle n) { return Inner(SBNewInner(go_int(n))); }
+    static Inner create(py::handle n) { return Inner(BrNewInner(go_int(n))); }
     PtrInner addr() const;
 };
 
@@ -219,14 +219,14 @@ public:
     explicit PtrInner(uintptr_t id) : InnerMembers(id) {}
     PtrInner(PtrInner&&) noexcept = default;
 
-    static PtrInner from_value(const Inner& value) { return PtrInner(SBInnerCopy(value.handle())); }
-    Inner value() const { return Inner(SBInnerAlias(handle())); }
+    static PtrInner from_value(const Inner& value) { return PtrInner(BrInnerCopy(value.handle())); }
+    Inner value() const { return Inner(BrInnerAlias(handle())); }
     void set_value(py::handle value) {
-        SBInnerStore(handle(), wrapper_arg<Inner>(value, "Inner").handle());
+        BrInnerStore(handle(), wrapper_arg<Inner>(value, "Inner").handle());
     }
 };
 
-PtrInner Inner::addr() const { return PtrInner(SBInnerAlias(handle())); }
+PtrInner Inner::addr() const { return PtrInner(BrInnerAlias(handle())); }
 
 template <class Class>
 Class& def_inner_members(Class& cls) {
@@ -242,14 +242,14 @@ protected:
     explicit BoxMembers(uintptr_t id) : Base(id) {}
 
 public:
-    py::object count() const { return counter(SBBoxGetCount(this->handle())); }
-    void set_count(py::handle value) { SBBoxSetCount(this->handle(), counter_value(value)); }
-    Inner inner() const { return Inner(SBBoxGetInner(this->handle())); }
+    py::object count() const { return counter(BrBoxGetCount(this->handle())); }
+    void set_count(py::handle value) { BrBoxSetCount(this->handle(), counter_value(value)); }
+    Inner inner() const { return Inner(BrBoxGetInner(this->handle())); }
     void set_inner(py::handle value) {
-        SBBoxSetInner(this->handle(), wrapper_arg<Inner>(value, "Inner").handle());
+        BrBoxSetInner(this->handle(), wrapper_arg<Inner>(value, "Inner").handle());
     }
-    py::str echo() const { return py_string(SBBoxEcho(this->handle())); }
-    void inc() { SBBoxInc(this->handle()); }
+    py::str echo() const { return py_string(BrBoxEcho(this->handle())); }
+    void inc() { BrBoxInc(this->handle()); }
 };
 
 class PtrBox;
@@ -264,7 +264,7 @@ public:
         const auto count_value = counter_value(count);
         const auto inner_handle =
             inner.is_none() ? 0 : wrapper_arg<Inner>(inner, "Inner").handle();
-        return Box(SBNewBox(count_value, inner_handle));
+        return Box(BrNewBox(count_value, inner_handle));
     }
     PtrBox addr() const;
 };
@@ -275,15 +275,15 @@ public:
     explicit PtrBox(uintptr_t id) : BoxMembers(id) {}
     PtrBox(PtrBox&&) noexcept = default;
 
-    static PtrBox from_value(const Box& value) { return PtrBox(SBBoxCopy(value.handle())); }
-    Box value() const { return Box(SBBoxAlias(handle())); }
+    static PtrBox from_value(const Box& value) { return PtrBox(BrBoxCopy(value.handle())); }
+    Box value() const { return Box(BrBoxAlias(handle())); }
     void set_value(py::handle value) {
-        SBBoxStore(handle(), wrapper_arg<Box>(value, "Box").handle());
+        BrBoxStore(handle(), wrapper_arg<Box>(value, "Box").handle());
     }
     PtrPtrBox ptr() const;
 };
 
-PtrBox Box::addr() const { return PtrBox(SBBoxAlias(handle())); }
+PtrBox Box::addr() const { return PtrBox(BrBoxAlias(handle())); }
 
 template <class Class>
 Class& def_box_members(Class& cls) {
@@ -302,26 +302,26 @@ public:
     PtrPtrBox(PtrPtrBox&&) noexcept = default;
 
     static PtrPtrBox from_value(py::handle value) {
-        return PtrPtrBox(SBNewPtrPtrBox(wrapper_arg<PtrBox>(value, "PtrBox").handle()));
+        return PtrPtrBox(BrNewPtrPtrBox(wrapper_arg<PtrBox>(value, "PtrBox").handle()));
     }
 
-    PtrBox value() const { return pointer_target<PtrBox>(SBPtrPtrBoxLoad(handle())); }
+    PtrBox value() const { return pointer_target<PtrBox>(BrPtrPtrBoxLoad(handle())); }
     void set_value(py::handle value) {
-        SBPtrPtrBoxStore(handle(), wrapper_arg<PtrBox>(value, "PtrBox").handle());
+        BrPtrPtrBoxStore(handle(), wrapper_arg<PtrBox>(value, "PtrBox").handle());
     }
 };
 
-PtrPtrBox PtrBox::ptr() const { return PtrPtrBox(SBNewPtrPtrBox(handle())); }
+PtrPtrBox PtrBox::ptr() const { return PtrPtrBox(BrNewPtrPtrBox(handle())); }
 
 // ---------------------------------------------------------------------------
 // Functions.
 
-void inc_ppp(const PtrPtrPtrInt& p) { SBIncPPP(p.handle()); }
-py::str echo_ppp(const PtrPtrPtrInt& p) { return py_string(SBEchoPPP(p.handle())); }
-void retarget(const PtrPtrInt& pp, const PtrInt& p) { SBRetarget(pp.handle(), p.handle()); }
-void clear(const PtrPtrInt& pp) { SBClear(pp.handle()); }
-void inc_int_ptr(const IntPtr& p) { SBIncIntPtr(p.handle()); }
-void inc_box_pp(const PtrPtrBox& pp) { SBIncBoxPP(pp.handle()); }
+void inc_ppp(const PtrPtrPtrInt& p) { BrIncPPP(p.handle()); }
+py::str echo_ppp(const PtrPtrPtrInt& p) { return py_string(BrEchoPPP(p.handle())); }
+void retarget(const PtrPtrInt& pp, const PtrInt& p) { BrRetarget(pp.handle(), p.handle()); }
+void clear(const PtrPtrInt& pp) { BrClear(pp.handle()); }
+void inc_int_ptr(const IntPtr& p) { BrIncIntPtr(p.handle()); }
+void inc_box_pp(const PtrPtrBox& pp) { BrIncBoxPP(pp.handle()); }
 
 }  // namespace
 
@@ -384,6 +384,6 @@ PYBIND11_MODULE(_native, module) {
     module.def("clear", &clear, py::arg("pp").noconvert().none(false));
     module.def("inc_int_ptr", &inc_int_ptr, py::arg("p").noconvert().none(false));
     module.def("inc_box_pp", &inc_box_pp, py::arg("pp").noconvert().none(false));
-    module.def("_holder_count", &SBHolderCount);
-    module.def("_collect_go", &SBCollect);
+    module.def("_holder_count", &BrHolderCount);
+    module.def("_collect_go", &BrCollect);
 }

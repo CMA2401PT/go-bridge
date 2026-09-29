@@ -57,7 +57,7 @@ bridge.must_positive(-1)            # GoPanic("not positive: -1")，进程不崩
 - 类型检查器无法区分可空与非空指针，这与 Go 相同；解引用 nil 在运行时抛 `GoPanic`。
 - Python 对象默认为真，`if p:` 对 nil 也成立。因此 `__bool__` 抛 `TypeError`，
   提示使用 `is_nil`。
-- nil 不占 Pin，`Ref` 析构对 0 本来就不调用 `SBUnPin`；只有会分配的构造函数才要求
+- nil 不占 Pin，`Ref` 析构对 0 本来就不调用 `BrUnPin`；只有会分配的构造函数才要求
   Go 返回非 0 的句柄。
 - `PinPointer[E any](*E)` 以类型参数约束为指针再判断 nil，避免 `any(p) == nil`
   这类 interface 比较。
@@ -87,7 +87,7 @@ Go 字段 `Value` 与指针类的 `.value`（`*p`）冲突，所以字段在 `Li
 
 ## panic
 
-每个会运行 G 代码的导出函数多一个 `SBString* panicked` 出参，并以
+每个会运行 G 代码的导出函数多一个 `BrString* panicked` 出参，并以
 `defer guard(panicked)` 开头：
 
 - `guard` 调用 `recover`，把 panic 值 `fmt.Sprint` 后写入出参，函数返回零值。

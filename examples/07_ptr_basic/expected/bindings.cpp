@@ -26,14 +26,14 @@ public:
     Ref& operator=(const Ref&) = delete;
     Ref(Ref&& other) noexcept : id_(std::exchange(other.id_, 0)) {}
     virtual ~Ref() {
-        if (id_) SBUnPin(id_);
+        if (id_) BrUnPin(id_);
     }
     // For binding code only; never exposed to Python.
     uintptr_t handle() const { return id_; }
 };
 
 // Go string results, as in 03_str: decode strictly, then free the C copy.
-py::str py_string(SBString output) {
+py::str py_string(BrString output) {
     std::unique_ptr<char, decltype(&std::free)> owned(output.data, &std::free);
     if (!owned) {
         throw py::value_error("cannot convert Go string");
@@ -97,10 +97,10 @@ public:
     explicit PtrInt(uintptr_t id) : Ptr(id) {}
     PtrInt(PtrInt&&) noexcept = default;
 
-    static PtrInt from_value(py::handle value) { return PtrInt(SBNewPtrInt(go_int(value))); }
+    static PtrInt from_value(py::handle value) { return PtrInt(BrNewPtrInt(go_int(value))); }
 
-    intptr_t value() const { return SBPtrIntLoad(handle()); }
-    void set_value(py::handle value) { SBPtrIntStore(handle(), go_int(value)); }
+    intptr_t value() const { return BrPtrIntLoad(handle()); }
+    void set_value(py::handle value) { BrPtrIntStore(handle(), go_int(value)); }
 };
 
 // *MyNamedNonStructInt: *p only accepts the named type, as Go assignment does.
@@ -111,22 +111,22 @@ public:
 
     static PtrMyNamedNonStructInt from_value(py::handle value) {
         return PtrMyNamedNonStructInt(
-            SBNewPtrMyNamedNonStructInt(my_named_non_struct_int_value(value)));
+            BrNewPtrMyNamedNonStructInt(my_named_non_struct_int_value(value)));
     }
 
-    py::object value() const { return named_int(SBPtrMyNamedNonStructIntLoad(handle())); }
+    py::object value() const { return named_int(BrPtrMyNamedNonStructIntLoad(handle())); }
     void set_value(py::handle value) {
-        SBPtrMyNamedNonStructIntStore(handle(), my_named_non_struct_int_value(value));
+        BrPtrMyNamedNonStructIntStore(handle(), my_named_non_struct_int_value(value));
     }
 
     // Value receiver through the pointer: (*p).EchoNonStructInt().
     py::str echo_non_struct_int() const {
-        return py_string(SBPtrMyNamedNonStructIntEchoNonStructInt(handle()));
+        return py_string(BrPtrMyNamedNonStructIntEchoNonStructInt(handle()));
     }
     py::str ptr_echo_non_struct_int() const {
-        return py_string(SBPtrMyNamedNonStructIntPtrEchoNonStructInt(handle()));
+        return py_string(BrPtrMyNamedNonStructIntPtrEchoNonStructInt(handle()));
     }
-    void inc() { SBPtrMyNamedNonStructIntInc(handle()); }
+    void inc() { BrPtrMyNamedNonStructIntInc(handle()); }
 };
 
 py::object define_my_named_non_struct_int(py::module_& module) {
@@ -152,7 +152,7 @@ py::object define_my_named_non_struct_int(py::module_& module) {
     cls.attr("echo_non_struct_int") = py::cpp_function(
         [](py::handle self) {
             return py_string(
-                SBMyNamedNonStructIntEchoNonStructInt(my_named_non_struct_int_value(self)));
+                BrMyNamedNonStructIntEchoNonStructInt(my_named_non_struct_int_value(self)));
         },
         py::name("echo_non_struct_int"), py::is_method(cls));
     // A new variable holding a copy: p := new(T); *p = i. A method, not a
@@ -174,10 +174,10 @@ protected:
 
 public:
     // Every slice in this example has the []int layout.
-    size_t size() const { return SBSliceIntLen(handle()); }
+    size_t size() const { return BrSliceIntLen(handle()); }
     py::list copy_to_py_list() const {
         std::vector<intptr_t> data(size());
-        if (SBCopySliceInt(handle(), data.data(), data.size()) != 0) {
+        if (BrCopySliceInt(handle(), data.data(), data.size()) != 0) {
             throw py::value_error("cannot copy Go slice");
         }
         py::list result;
@@ -195,7 +195,7 @@ public:
     static SliceInt from_values(const py::iterable& values) {
         std::vector<intptr_t> data;
         for (py::handle item : values) data.push_back(go_int(item));
-        return SliceInt(SBNewSliceInt(data.data(), data.size()));
+        return SliceInt(BrNewSliceInt(data.data(), data.size()));
     }
 };
 
@@ -207,11 +207,11 @@ public:
     MyNamedNonStructSliceInt(MyNamedNonStructSliceInt&&) noexcept = default;
 
     static MyNamedNonStructSliceInt from_slice(const SliceInt& values) {
-        return MyNamedNonStructSliceInt(SBNewMyNamedNonStructSliceInt(values.handle()));
+        return MyNamedNonStructSliceInt(BrNewMyNamedNonStructSliceInt(values.handle()));
     }
-    SliceInt unname() const { return SliceInt(SBMyNamedNonStructSliceIntUnname(handle())); }
+    SliceInt unname() const { return SliceInt(BrMyNamedNonStructSliceIntUnname(handle())); }
     py::str echo_non_struct_slice_int() const {
-        return py_string(SBMyNamedNonStructSliceIntEchoNonStructSliceInt(handle()));
+        return py_string(BrMyNamedNonStructSliceIntEchoNonStructSliceInt(handle()));
     }
 };
 
@@ -223,12 +223,12 @@ public:
     PtrSliceInt(PtrSliceInt&&) noexcept = default;
 
     static PtrSliceInt from_value(py::handle value) {
-        return PtrSliceInt(SBNewPtrSliceInt(wrapper_arg<SliceInt>(value, "SliceInt").handle()));
+        return PtrSliceInt(BrNewPtrSliceInt(wrapper_arg<SliceInt>(value, "SliceInt").handle()));
     }
 
-    SliceInt value() const { return SliceInt(SBPtrSliceIntLoad(handle())); }
+    SliceInt value() const { return SliceInt(BrPtrSliceIntLoad(handle())); }
     void set_value(py::handle value) {
-        SBPtrSliceIntStore(handle(), wrapper_arg<SliceInt>(value, "SliceInt").handle());
+        BrPtrSliceIntStore(handle(), wrapper_arg<SliceInt>(value, "SliceInt").handle());
     }
 };
 
@@ -239,26 +239,26 @@ public:
     PtrMyNamedNonStructSliceInt(PtrMyNamedNonStructSliceInt&&) noexcept = default;
 
     static PtrMyNamedNonStructSliceInt from_value(py::handle value) {
-        return PtrMyNamedNonStructSliceInt(SBNewPtrMyNamedNonStructSliceInt(
+        return PtrMyNamedNonStructSliceInt(BrNewPtrMyNamedNonStructSliceInt(
             wrapper_arg<MyNamedNonStructSliceInt>(value, "MyNamedNonStructSliceInt").handle()));
     }
 
     MyNamedNonStructSliceInt value() const {
-        return MyNamedNonStructSliceInt(SBPtrMyNamedNonStructSliceIntLoad(handle()));
+        return MyNamedNonStructSliceInt(BrPtrMyNamedNonStructSliceIntLoad(handle()));
     }
     void set_value(py::handle value) {
-        SBPtrMyNamedNonStructSliceIntStore(
+        BrPtrMyNamedNonStructSliceIntStore(
             handle(),
             wrapper_arg<MyNamedNonStructSliceInt>(value, "MyNamedNonStructSliceInt").handle());
     }
 
     py::str echo_non_struct_slice_int() const {
-        return py_string(SBPtrMyNamedNonStructSliceIntEchoNonStructSliceInt(handle()));
+        return py_string(BrPtrMyNamedNonStructSliceIntEchoNonStructSliceInt(handle()));
     }
     py::str ptr_echo_non_struct_slice_int() const {
-        return py_string(SBPtrMyNamedNonStructSliceIntPtrEchoNonStructSliceInt(handle()));
+        return py_string(BrPtrMyNamedNonStructSliceIntPtrEchoNonStructSliceInt(handle()));
     }
-    void append(py::handle v) { SBPtrMyNamedNonStructSliceIntAppend(handle(), go_int(v)); }
+    void append(py::handle v) { BrPtrMyNamedNonStructSliceIntAppend(handle(), go_int(v)); }
 };
 
 // ---------------------------------------------------------------------------
@@ -267,37 +267,37 @@ public:
 // pointer would be lost silently.
 
 py::str fn_echo_non_struct_int(py::handle i) {
-    return py_string(SBFnEchoNonStructInt(my_named_non_struct_int_value(i)));
+    return py_string(BrFnEchoNonStructInt(my_named_non_struct_int_value(i)));
 }
 
 py::str ptr_fn_echo_non_struct_int(const PtrMyNamedNonStructInt& i) {
-    return py_string(SBPtrFnEchoNonStructInt(i.handle()));
+    return py_string(BrPtrFnEchoNonStructInt(i.handle()));
 }
 
-py::str fn_echo_int(py::handle i) { return py_string(SBFnEchoInt(go_int(i))); }
+py::str fn_echo_int(py::handle i) { return py_string(BrFnEchoInt(go_int(i))); }
 
-py::str ptr_fn_echo_int(const PtrInt& i) { return py_string(SBPtrFnEchoInt(i.handle())); }
+py::str ptr_fn_echo_int(const PtrInt& i) { return py_string(BrPtrFnEchoInt(i.handle())); }
 
-void inc_int(const PtrInt& i) { SBIncInt(i.handle()); }
+void inc_int(const PtrInt& i) { BrIncInt(i.handle()); }
 
 py::str fn_echo_non_struct_slice_int(const MyNamedNonStructSliceInt& si) {
-    return py_string(SBFnEchoNonStructSliceInt(si.handle()));
+    return py_string(BrFnEchoNonStructSliceInt(si.handle()));
 }
 
 py::str fn_echo_slice_int(const SliceInt& si) {
-    return py_string(SBFnEchoSliceInt(si.handle()));
+    return py_string(BrFnEchoSliceInt(si.handle()));
 }
 
 py::str ptr_fn_echo_non_struct_slice_int(const PtrMyNamedNonStructSliceInt& si) {
-    return py_string(SBPtrFnEchoNonStructSliceInt(si.handle()));
+    return py_string(BrPtrFnEchoNonStructSliceInt(si.handle()));
 }
 
 py::str ptr_fn_echo_slice_int(const PtrSliceInt& si) {
-    return py_string(SBPtrFnEchoSliceInt(si.handle()));
+    return py_string(BrPtrFnEchoSliceInt(si.handle()));
 }
 
 void append_slice_int(const PtrSliceInt& si, py::handle v) {
-    SBAppendSliceInt(si.handle(), go_int(v));
+    BrAppendSliceInt(si.handle(), go_int(v));
 }
 
 }  // namespace
@@ -371,6 +371,6 @@ PYBIND11_MODULE(_native, module) {
                py::arg("si").noconvert().none(false));
     module.def("append_slice_int", &append_slice_int,
                py::arg("si").noconvert().none(false), py::arg("v"));
-    module.def("_holder_count", &SBHolderCount);
-    module.def("_collect_go", &SBCollect);
+    module.def("_holder_count", &BrHolderCount);
+    module.def("_collect_go", &BrCollect);
 }

@@ -30,7 +30,7 @@ type Import struct{ Alias, Path string }
 
 func planClass(t *pyapi.Type, wire map[*pyapi.Type]*Type) *Class {
 	c := &Class{Type: wire[t], Underlying: wire[t.Underlying], Elem: wire[t.Elem], Pointer: wire[t.Pointer]}
-	prefix := fmt.Sprintf("SBType%d", t.Go.ID)
+	prefix := fmt.Sprintf("BrType%d", t.Go.ID)
 	if t.Shape == pyapi.StructObject {
 		c.New = prefix + "New"
 		c.Copy = prefix + "Copy"

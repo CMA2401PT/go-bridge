@@ -61,7 +61,7 @@ func TestSignaturesAgreeAcrossFiles(t *testing.T) {
 	out := files(t, `type Text = string
 func Pair(n int, s Text, f float32) (Text, bool) { return s, n > 0 }`)
 	contains(t, "go/main.go", out["go/main.go"],
-		"func SBCall0(a0 C.intptr_t, a1 C.SBString, a2 C.float) (out C.SBResult0)",
+		"func BrCall0(a0 C.intptr_t, a1 C.BrString, a2 C.float) (out C.BrResult0)",
 		"r0, r1 := api.Pair(int(a0), bridgeInput(a1), float32(a2))",
 		"out.r0 = bridgeString(string(r0))")
 	contains(t, "bindings.cpp", out["bindings.cpp"],
@@ -76,17 +76,17 @@ func Pair(n int, s Text, f float32) (Text, bool) { return s, n > 0 }`)
 
 func TestPackageWithoutFunctionsInitializesTarget(t *testing.T) {
 	out := files(t, `type Text = string`)
-	contains(t, "go/main.go", out["go/main.go"], `_ "example.test/api"`, "//export SBInit", "func SBInit() {}")
-	contains(t, "bindings.cpp", out["bindings.cpp"], "SBInit();")
+	contains(t, "go/main.go", out["go/main.go"], `_ "example.test/api"`, "//export BrInit", "func BrInit() {}")
+	contains(t, "bindings.cpp", out["bindings.cpp"], "BrInit();")
 	contains(t, "go_api/__init__.py", out["go_api/__init__.py"], "from . import _native")
 }
 
 func TestVoidHasNoResultOrPanicProtocol(t *testing.T) {
 	out := files(t, `func Fail() { panic("failure") }`)
-	contains(t, "go/main.go", out["go/main.go"], "func SBCall0()", "api.Fail()")
-	contains(t, "bindings.cpp", out["bindings.cpp"], "SBCall0();", "return py::none();")
+	contains(t, "go/main.go", out["go/main.go"], "func BrCall0()", "api.Fail()")
+	contains(t, "bindings.cpp", out["bindings.cpp"], "BrCall0();", "return py::none();")
 	for _, path := range []string{"go/main.go", "bindings.cpp", "go_api/__init__.py", "go_api/__init__.pyi"} {
-		for _, removed := range []string{"SBResult", "defer", "recover", "panicked", "panic_message", "GoPanic"} {
+		for _, removed := range []string{"BrResult", "defer", "recover", "panicked", "panic_message", "GoPanic"} {
 			if strings.Contains(out[path], removed) {
 				t.Errorf("%s contains %q", path, removed)
 			}

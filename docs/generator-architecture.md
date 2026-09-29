@@ -80,7 +80,7 @@ workspace 和 replace 规则继续生效；`package` 决定 Python 包名和库�
 扩展、动态库和 Python 文件放在 `.build/python/<包名>/`。构建过程直接更新 `.build`，
 不具有生成源码发布时的整体重命名保证。
 
-导入 Python 包时，`__init__.py` 加载 `_native`；C++ 模块初始化调用内部 SBInit，
+导入 Python 包时，`__init__.py` 加载 `_native`；C++ 模块初始化调用内部 BrInit，
 等待 Go 包初始化完成。即使目标没有导出函数，这个入口也确保 cgo 生成头文件并维持
 对 Go 库的链接依赖。详见[初始化协议](generator-runtime.md#模块加载与-go-初始化)。
 

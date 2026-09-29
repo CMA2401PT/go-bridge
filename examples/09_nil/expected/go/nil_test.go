@@ -6,9 +6,9 @@ import (
 	"unsafe"
 )
 
-// Test files cannot write C.SBString; _Ctype_SBString is cgo's internal name
+// Test files cannot write C.BrString; _Ctype_BrString is cgo's internal name
 // for it, visible within the package but undocumented, acceptable in a test.
-// SBString is {char *data; size_t size}; the C copy is left unfreed.
+// BrString is {char *data; size_t size}; the C copy is left unfreed.
 func panicOf[S any](call func(*S)) string {
 	var out S
 	call(&out)
@@ -32,14 +32,14 @@ func TestZeroHandleIsNil(t *testing.T) {
 
 func TestPanicIsRecovered(t *testing.T) {
 	baseline := holderCount()
-	if got := panicOf(func(p *_Ctype_SBString) { SBMustPositive(-1, p) }); got != "not positive: -1" {
+	if got := panicOf(func(p *_Ctype_BrString) { BrMustPositive(-1, p) }); got != "not positive: -1" {
 		t.Fatalf("panic = %q", got)
 	}
-	if panicOf(func(p *_Ctype_SBString) { SBListFirst(0, p) }) == "" {
+	if panicOf(func(p *_Ctype_BrString) { BrListFirst(0, p) }) == "" {
 		t.Fatal("nil dereference inside Go was not recovered")
 	}
-	if got := panicOf(func(p *_Ctype_SBString) {
-		if SBListLen(0, p) != 0 {
+	if got := panicOf(func(p *_Ctype_BrString) {
+		if BrListLen(0, p) != 0 {
 			t.Error("nil receiver must run the method")
 		}
 	}); got != "" {

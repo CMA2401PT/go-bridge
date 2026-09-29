@@ -75,11 +75,11 @@ Go 的三下标形式或 `cap()`。Go 没有步长，`s[::k]`（k ≠ 1）抛 `V
 
 | 操作 | ABI | 行为 |
 | --- | --- | --- |
-| `SliceInt(values)` | `SBNewSliceInt(intptr_t 数组, 长度) → uintptr_t` | C++ 先逐项转换到临时数组，Go 复制到新 `[]int` 再 Pin |
-| `SliceInt.copy_to_py_list()` | `SBCopySliceInt(句柄, 缓冲区, 长度)` | Go 按值填充 C++ 缓冲区，C++ 再建 list |
-| `SliceSliceInt(values)` | `SBNewSliceSliceInt(uintptr_t 句柄数组, 长度) → uintptr_t` | Go 对每个句柄 `Get[[]int]`，组成新 `[][]int` 再 Pin |
-| `SliceSliceInt.copy_to_py_list()` | `SBSliceSliceIntItems(句柄, 句柄缓冲区, 长度)` | Go 对每个元素分别 Pin，C++ 各包装为新的 `SliceInt` |
-| `len()` | `SB<类型>Len(句柄) → size_t` | Go 读取长度 |
+| `SliceInt(values)` | `BrNewSliceInt(intptr_t 数组, 长度) → uintptr_t` | C++ 先逐项转换到临时数组，Go 复制到新 `[]int` 再 Pin |
+| `SliceInt.copy_to_py_list()` | `BrCopySliceInt(句柄, 缓冲区, 长度)` | Go 按值填充 C++ 缓冲区，C++ 再建 list |
+| `SliceSliceInt(values)` | `BrNewSliceSliceInt(uintptr_t 句柄数组, 长度) → uintptr_t` | Go 对每个句柄 `Get[[]int]`，组成新 `[][]int` 再 Pin |
+| `SliceSliceInt.copy_to_py_list()` | `BrSliceSliceIntItems(句柄, 句柄缓冲区, 长度)` | Go 对每个元素分别 Pin，C++ 各包装为新的 `SliceInt` |
+| `len()` | `Br<类型>Len(句柄) → size_t` | Go 读取长度 |
 
 **值元素**：Python int 与 Go int 之间只复制值，ABI 元素类型沿用 01_basic 的
 `intptr_t`。构造接受任意 `Iterable[int]`（list、tuple、range、生成器等），每个元素
@@ -127,7 +127,7 @@ C++ 包装对象也不持有 Python 对象，因此不存在跨边界的引用�
 
 - 构造时 Python 数据被复制到 Go；读取时 Go 数据被复制到新的 Python list。
   C++ 临时缓冲区只在调用期间借给 Go，Go 不保存其地址。
-- 所有 slice 的内存都由 Go GC 管理，Ref 析构只调用通用的 `SBUnPin`。
+- 所有 slice 的内存都由 Go GC 管理，Ref 析构只调用通用的 `BrUnPin`。
 - nil 与空 slice 在 Python 中都表现为长度 0；从 Python 构造的空 slice 是非 nil 的。
 - 外部缓冲区为空指针但长度非零、长度超出 Go int 能表达的元素数、或句柄为 0 时，
   Go 返回 0 或错误码，C++ 抛出 `ValueError`。

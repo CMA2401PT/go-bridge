@@ -8,14 +8,14 @@ namespace py = pybind11;
 
 namespace {
 
-SBString c_string(const py::str& input) {
+BrString c_string(const py::str& input) {
     Py_ssize_t size;
     const char* data = PyUnicode_AsUTF8AndSize(input.ptr(), &size);
     if (!data) throw py::error_already_set();
-    return SBString{const_cast<char*>(data), static_cast<size_t>(size)};
+    return BrString{const_cast<char*>(data), static_cast<size_t>(size)};
 }
 
-py::str py_string(SBString output) {
+py::str py_string(BrString output) {
     std::unique_ptr<char, decltype(&std::free)> owned(output.data, &std::free);
     if (!owned) {
         throw py::value_error("cannot convert Go string");
@@ -30,13 +30,13 @@ py::str py_string(SBString output) {
 }
 
 py::str recv_and_return(py::str input) {
-    SBString encoded = c_string(input);
-    return py_string(SBEchoString(encoded));
+    BrString encoded = c_string(input);
+    return py_string(BrEchoString(encoded));
 }
 
 }  // namespace
 
 PYBIND11_MODULE(_native, module) {
-    module.doc() = "Go strings through a by-value SBString ABI";
+    module.doc() = "Go strings through a by-value BrString ABI";
     module.def("recv_and_return", &recv_and_return, py::arg("value").noconvert());
 }

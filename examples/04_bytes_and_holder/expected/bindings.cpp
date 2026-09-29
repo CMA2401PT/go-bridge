@@ -23,18 +23,18 @@ public:
     Ref& operator=(const Ref&) = delete;
     Ref(Ref&& other) noexcept : id_(std::exchange(other.id_, 0)) {}
     virtual ~Ref() {
-        if (id_) SBUnPin(id_);
+        if (id_) BrUnPin(id_);
     }
 };
 
 class SliceBytes : public Ref {
 public:
     explicit SliceBytes(uintptr_t id) : Ref(id) {}
-    explicit SliceBytes(py::bytes input) : Ref(SBNewBytes(
+    explicit SliceBytes(py::bytes input) : Ref(BrNewBytes(
         PyBytes_AS_STRING(input.ptr()), static_cast<size_t>(PyBytes_GET_SIZE(input.ptr())))) {}
     SliceBytes(SliceBytes&&) noexcept = default;
 
-    size_t size() const { return SBBytesLen(handle()); }
+    size_t size() const { return BrBytesLen(handle()); }
     py::bytes copy_to_py_bytes() const {
         const auto length = size();
         if (length > static_cast<size_t>(PY_SSIZE_T_MAX)) {
@@ -43,12 +43,12 @@ public:
         PyObject* raw = PyBytes_FromStringAndSize(nullptr, static_cast<Py_ssize_t>(length));
         if (!raw) throw py::error_already_set();
         auto result = py::reinterpret_steal<py::bytes>(raw);
-        if (SBCopyBytes(handle(), PyBytes_AS_STRING(raw), length) != 0) {
+        if (BrCopyBytes(handle(), PyBytes_AS_STRING(raw), length) != 0) {
             throw py::value_error("cannot copy Go bytes");
         }
         return result;
     }
-    SliceBytes echo() const { return SliceBytes(SBEchoBytes(handle())); }
+    SliceBytes echo() const { return SliceBytes(BrEchoBytes(handle())); }
 };
 
 SliceBytes recv_and_return_bytes(const SliceBytes& input) {
@@ -65,6 +65,6 @@ PYBIND11_MODULE(_native, module) {
         .def("__len__", &SliceBytes::size)
         .def("copy_to_py_bytes", &SliceBytes::copy_to_py_bytes);
     module.def("recv_and_return_bytes", &recv_and_return_bytes, py::arg("value").noconvert());
-    module.def("_holder_count", &SBHolderCount);
-    module.def("_collect_go", &SBCollect);
+    module.def("_holder_count", &BrHolderCount);
+    module.def("_collect_go", &BrCollect);
 }
