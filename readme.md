@@ -24,14 +24,16 @@ C ABI；pybind11 扩展再调用该 ABI，并向 Python 暴露 CPython 原生扩
 项目的目标实现是 pybind11 路线，而不是基于 `ctypes` 的运行时调用。生成结果
 还必须包含 `.pyi`，让 IDE 和静态类型检查器获得明确的类型信息。
 
-## 当前阶段：先定义正确答案
+## 当前阶段：根据样例实现生成器
 
-**当前阶段不以设计或完善生成工具 C 为主。**
+已经开始根据 examples 01–09 重写生成器。完整路线、阶段状态与支持范围见
+[`docs/generator-plan.md`](docs/generator-plan.md)，模块边界见
+[`docs/generator-architecture.md`](docs/generator-architecture.md)。每个可验证阶段单独提交。
 
-仓库现在首先要解决的问题是：对于一组有代表性的 Go 代码 G，理想的 Python
+examples 先行研究的问题是：对于一组有代表性的 Go 代码 G，理想的 Python
 包装 P 究竟应该是什么样，才能正确、安全并且符合 Python 的使用习惯？
 
-因此，`examples/` 是当前工作的中心。每个 example 都应先人工完成一条端到端
+`examples/` 是行为参考。每个 example 都应先人工完成一条端到端
 链路：
 
 1. 编写一个范围明确、具有代表性的 Go API。
@@ -40,8 +42,9 @@ C ABI；pybind11 扩展再调用该 ABI，并向 Python 暴露 CPython 原生扩
 4. 编译并运行测试，验证行为、类型转换、错误处理和内存管理。
 5. 在文档中记录设计选择、已知限制和可推广的映射规则。
 
-这些人工验证过的案例就是未来生成器的“黄金样例”。等案例覆盖足够广、映射
-规则趋于稳定后，再据此设计中间表示、解析器和代码生成器。
+这些人工验证过的案例是生成器的“黄金样例”。生成产物不要求与手写代码逐字一致；
+历史样例的规则有版本差异，nil/panic 统一按 09 处理。具体能力以生成器已通过的
+端到端测试为准，不能把计划中的能力当作已经实现。
 
 更详细的 example 规范和建议覆盖范围见 [`examples/readme.md`](examples/readme.md)。
 
