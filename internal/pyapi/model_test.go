@@ -61,7 +61,6 @@ func TestConflictsAndBackendBoundary(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
 		{`func URLValue() {}; func UrlValue() {}`, "collides"},
 		{`func F(from int, from_ int) {}`, "parameter"},
-		{`type GoPanic = string`, "bridge exception"},
 		{`func F(v []int) {}`, "not implemented yet"},
 		{`type Count int`, "not implemented yet"},
 	} {
@@ -78,5 +77,15 @@ func TestConflictsAndBackendBoundary(t *testing.T) {
 		if _, err := Plan(p.Go, name); err == nil {
 			t.Errorf("accepted package name %q", name)
 		}
+	}
+}
+
+func TestGoPanicIsNotReserved(t *testing.T) {
+	p, err := planSource(t, `type GoPanic = string`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Aliases) != 1 || p.Aliases[0].Name != "GoPanic" {
+		t.Fatalf("alias not preserved: %+v", p.Aliases)
 	}
 }

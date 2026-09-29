@@ -63,7 +63,7 @@ func Pair(n int, s Text, f float32) (Text, bool) { return s, n > 0 }`)
 	contains(t, "go/main.go", out["go/main.go"],
 		"func SBCall0(a0 C.intptr_t, a1 C.SBString, a2 C.float) (out C.SBResult0)",
 		"r0, r1 := api.Pair(int(a0), bridgeInput(a1), float32(a2))",
-		"C.free(unsafe.Pointer(out.r0.data))")
+		"out.r0 = bridgeString(r0)")
 	contains(t, "bindings.cpp", out["bindings.cpp"],
 		"static_assert(sizeof(intptr_t) * 8 == 64",
 		"std::free(data.r0.data);",
@@ -71,10 +71,29 @@ func Pair(n int, s Text, f float32) (Text, bool) { return s, n > 0 }`)
 	contains(t, "go_api/__init__.pyi", out["go_api/__init__.pyi"],
 		"Text = _builtins.str",
 		"def pair(n: _builtins.int, s: _builtins.str, f: _builtins.float) -> _builtins.tuple[_builtins.str, _builtins.bool]: ...")
-	contains(t, "go_api/__init__.py", out["go_api/__init__.py"], `__all__ = ["GoPanic","pair","Text"]`)
+	contains(t, "go_api/__init__.py", out["go_api/__init__.py"], `__all__ = ["pair","Text"]`)
 }
 
 func TestPackageWithoutFunctionsOnlyLinksTarget(t *testing.T) {
 	out := files(t, `type Text = string`)
 	contains(t, "go/main.go", out["go/main.go"], `_ "example.test/api"`)
+	contains(t, "go_api/__init__.py", out["go_api/__init__.py"], "from . import _native")
+}
+
+func TestVoidHasNoResultOrPanicProtocol(t *testing.T) {
+	out := files(t, `func Fail() { panic("failure") }`)
+	contains(t, "go/main.go", out["go/main.go"], "func SBCall0()", "api.Fail()")
+	contains(t, "bindings.cpp", out["bindings.cpp"], "SBCall0();", "return py::none();")
+	for _, path := range []string{"go/main.go", "bindings.cpp", "go_api/__init__.py", "go_api/__init__.pyi"} {
+		for _, removed := range []string{"SBResult", "defer", "recover", "panicked", "panic_message", "GoPanic"} {
+			if strings.Contains(out[path], removed) {
+				t.Errorf("%s contains %q", path, removed)
+			}
+		}
+	}
+}
+
+func TestEmptyPackageExports(t *testing.T) {
+	out := files(t, "")
+	contains(t, "go_api/__init__.py", out["go_api/__init__.py"], "from . import _native", "__all__ = []")
 }

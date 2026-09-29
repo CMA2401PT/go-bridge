@@ -16,15 +16,14 @@ func cppSource(p *abi.Package) string {
 	b.WriteString(cppRuntime)
 	fmt.Fprintf(&b, "\nstatic_assert(sizeof(intptr_t) * 8 == %d, \"regenerate for this target architecture\");\n", p.IntBits)
 	for _, op := range p.Operations {
-		cppOwner(&b, op)
+		if len(op.Results) > 0 {
+			cppOwner(&b, op)
+		}
 	}
-	fmt.Fprintf(&b, `
+	b.WriteString(`
 PYBIND11_MODULE(_native, module) {
 module.doc() = "Generated Go bindings";
-auto panic_type = py::reinterpret_steal<py::object>(PyErr_NewException("%s._native.GoPanic", PyExc_RuntimeError, nullptr));
-if (!panic_type) throw py::error_already_set();
-module.attr("GoPanic") = panic_type;
-`, p.Python.Name)
+`)
 	for _, op := range p.Operations {
 		cppFunction(&b, op)
 	}
@@ -33,9 +32,10 @@ module.attr("GoPanic") = panic_type;
 }
 
 // cppOwner renders an RAII holder that frees every buffer a result owns, so
-// normal returns, panics and Python conversion errors all release memory.
+// normal returns and Python conversion errors both release memory. An
+// unrecovered Go panic terminates the process before ownership reaches C++.
 func cppOwner(b *strings.Builder, op *abi.Operation) {
-	fmt.Fprintf(b, "struct Owned%s {\n%s data;\n~Owned%s() {\nstd::free(data.panic_message.data);\n", op.Result, op.Result, op.Result)
+	fmt.Fprintf(b, "struct Owned%s {\n%s data;\n~Owned%s() {\n", op.Result, op.Result, op.Result)
 	for i, r := range op.Results {
 		if r.Kind == abi.String {
 			fmt.Fprintf(b, "std::free(data.r%d.data);\n", i)
@@ -48,19 +48,16 @@ func cppOwner(b *strings.Builder, op *abi.Operation) {
 // before the call; results are owned before any Python object is created.
 func cppFunction(b *strings.Builder, op *abi.Operation) {
 	params := join(len(op.Params), func(i int) string { return fmt.Sprintf("py::handle a%d", i) })
-	fmt.Fprintf(b, "module.def(%q, [panic_type](%s) -> py::object {\n", op.Python.Name, params)
+	fmt.Fprintf(b, "module.def(%q, [](%s) -> py::object {\n", op.Python.Name, params)
 	for i, a := range op.Params {
 		fmt.Fprintf(b, "const auto v%d = %s(a%d);\n", i, cppInput(a), i)
 	}
 	args := join(len(op.Params), func(i int) string { return fmt.Sprintf("v%d", i) })
-	fmt.Fprintf(b, "Owned%s owned{%s(%s)};\n", op.Result, op.Symbol, args)
-	b.WriteString(`const auto& result = owned.data;
-if (result.panicked) {
-auto message = decode(result.panic_message, "replace");
-PyErr_SetObject(panic_type.ptr(), message.ptr());
-throw py::error_already_set();
-}
-`)
+	if len(op.Results) == 0 {
+		fmt.Fprintf(b, "%s(%s);\n", op.Symbol, args)
+	} else {
+		fmt.Fprintf(b, "Owned%s owned{%s(%s)};\nconst auto& result = owned.data;\n", op.Result, op.Symbol, args)
+	}
 	switch len(op.Results) {
 	case 0:
 		b.WriteString("return py::none();\n")
@@ -98,7 +95,7 @@ func cppInput(t *abi.Type) string {
 func cppOutput(t *abi.Type, field string) string {
 	switch t.Kind {
 	case abi.String:
-		return "decode(" + field + ", \"strict\")"
+		return "decode(" + field + ")"
 	case abi.Boolean:
 		return "py::bool_(" + field + " != 0)"
 	case abi.Float:

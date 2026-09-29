@@ -4,8 +4,8 @@
 //
 // Ownership: a String input borrows a UTF-8 buffer for the duration of a call.
 // A String output owns C-allocated memory (freed with free), including an
-// empty string. Numeric values carry no ownership. Every result record also
-// owns its panic_message buffer, which is set only when panicked is nonzero.
+// empty string. Numeric values carry no ownership. Go panics are not recovered
+// by the bridge and have no ABI representation.
 package abi
 
 import (
@@ -37,13 +37,12 @@ type Type struct {
 
 // Operation is one exported C function wrapping one Go function.
 //
-// It is declared as `Result Symbol(params...)`, where Result is a struct with
-// `uint8_t panicked; SBString panic_message;` followed by one field rN per
-// Go result.
+// Functions with results return a Result struct containing one field rN per
+// Go result. Functions without results return void and have an empty Result.
 type Operation struct {
 	Python  *pyapi.Function
 	Symbol  string // exported C function name
-	Result  string // C name of the result struct
+	Result  string // C name of the result struct; empty for void operations
 	Params  []*Type
 	Results []*Type
 }
@@ -67,7 +66,10 @@ func Plan(p *pyapi.Package) (*Package, error) {
 		wire[t] = w
 	}
 	for i, f := range p.Functions {
-		op := &Operation{Python: f, Symbol: fmt.Sprintf("SBCall%d", i), Result: fmt.Sprintf("SBResult%d", i)}
+		op := &Operation{Python: f, Symbol: fmt.Sprintf("SBCall%d", i)}
+		if len(f.Results) > 0 {
+			op.Result = fmt.Sprintf("SBResult%d", i)
+		}
 		for _, arg := range f.Params {
 			op.Params = append(op.Params, wire[arg.Type])
 		}

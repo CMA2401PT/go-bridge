@@ -46,8 +46,9 @@ named bool 的接口仍未定义；不要为完成代码而随意决定其 Pytho
 - Go 和 C++ 消费同一个 ABI 描述。新增 Kind 时要检查 `goInput`、`goOutput`、
   `cppInput`、`cppOutput`：当前 default 分支按数值处理，新资源类型不能误落进去。
 - 一个 C++ owner 在 Python 返回值转换前接管整个 ABI 结果，失败路径也释放未转换结果。
-- 普通字符串严格解码，panic 文本替换非法 UTF-8；整数越界是 OverflowError，类型不符
-  是 TypeError。这些行为属于公开接口，不是任意可换的实现细节。
+- 字符串严格解码；整数越界是 OverflowError，类型不符是 TypeError。
+- Go 适配层不恢复 panic；未恢复的 Go panic 终止整个 Python 进程，不转换为 Python 异常。
+  这些行为属于公开接口，不是任意可换的实现细节。
 - 相同输入的输出应可重复，但模型 ID 和 ABI 操作序号不是跨版本稳定标识。
 
 `53cfc4b` 的拆分方式应延续：一个函数完成一层或一个操作，类型映射用独立 helper，
@@ -60,8 +61,8 @@ named bool 的接口仍未定义；不要为完成代码而随意决定其 Pytho
 | --- | --- |
 | [gomodel/model_test.go](../internal/gomodel/model_test.go) | 闭包与 alias、跨包同名类型；`TestMethodSetQueryDoesNotInventTypes`；01–09 的前端分析；独立 module 与构建条件 |
 | [pyapi/model_test.go](../internal/pyapi/model_test.go) | Snake、参数名、alias、名字冲突与后端拒绝边界 |
-| [emit/emit_test.go](../internal/emit/emit_test.go) | `TestSignaturesAgreeAcrossFiles` 对照 Go/C++/stub 关键片段；无函数包仍链接原包 |
-| [generate/generate_test.go](../internal/generate/generate_test.go) | 生成确定性、输出保护；01–03 实际编译调用；独立 module、本地 replace、标量范围、字符串和异常 |
+| [emit/emit_test.go](../internal/emit/emit_test.go) | `TestSignaturesAgreeAcrossFiles` 对照 Go/C++/stub 关键片段；无函数包仍链接原包、加载扩展；void 不带结果和 panic 协议 |
+| [generate/generate_test.go](../internal/generate/generate_test.go) | 生成确定性、输出保护；01–03 实际编译调用；独立 module、本地 replace、标量范围、字符串转换错误；独立 Python 子进程验证 panic 终止进程 |
 
 `emit` 的文本断言能发现两端签名或导出名偏离，但不能替代编译。`gomodel` 能分析
 01–09，也不能替代对应后端的端到端验收。反复制造解码失败能检查调用是否继续工作，
@@ -81,9 +82,11 @@ GO_BRIDGE_PYTHON=python go test ./internal/generate -run TestIntegration -count=
 GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIntegration -count=1 -v
 ```
 
-`buildAndRun` 给 Go 构建启用 cgocheck2，并将行为脚本执行两次：默认模式及
-`GODEBUG=panicnil=1`。mypy 检查的是生成的 `.pyi`；脚本另外执行声明文件并检查部分
-注解，防止 int/tuple 等公开函数遮蔽内建类型。
+`buildProject` 给 Go 构建启用 cgocheck2；`buildAndRun` 执行正常行为与 Python 异常测试。
+`TestIntegrationPanicTerminatesProcess` 将各个致命调用放在独立 Python 子进程中，验证
+panic、除零和 nil 解引用无法被 Python 捕获；panic(nil) 覆盖默认与 GODEBUG=panicnil=1
+模式，并确认目标 Go 代码自身的 recover 仍有效。mypy 检查生成的 `.pyi`；脚本另执行
+声明文件并检查部分注解，防止 int/tuple 等公开函数遮蔽内建类型。
 
 按变更范围选择测试：纯命名改动先运行 pyapi/emit；改变传输或运行时语义必须跑原生
 集成测试；文档改动核对链接、关键符号和可执行命令。通过后只有出现新改动或疑点才
@@ -102,7 +105,8 @@ GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIn
 | C++ 找不到头文件/符号或编译类型不符 | cgo 头文件、`abi.Operation`、`bindings.go` 及 `.build/native` |
 | 导入错误、加载到旧扩展 | 当前解释器、`PYTHONPATH`、`.build/python` 中的库和扩展 |
 | 错误异常类型或数值范围 | `runtime.cpp.tmpl` 及对应 ABI 位宽 |
-| panic 丢失或多返回值错误路径异常 | `goOperation` 完成标志、结果清理与 `cppOwner` |
+| Go panic 导致 Python 进程退出 | 这是当前契约；按 Go runtime 输出的栈定位原函数 |
+| 多返回值转换失败时资源未释放 | `cppOwner` 是否在任何结果转换前接管全部结果 |
 
 `-dir` 只控制包解析的起点，`-out` 相对生成器进程当前目录解析。`bridge.json` 保存源码
 目录而不快照整个 Go 构建环境；生成与构建之间修改源码、构建标签或平台设置时，应
@@ -110,3 +114,6 @@ GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIn
 
 当前构建脚本面向 macOS/Linux、启用 GIL 的 CPython。macOS arm64 已实测；Linux
 代码路径存在，但不应把本机测试结果表述为 Linux 已验收。
+
+已知缺陷：只有 alias、没有导出函数的包可以生成源码，但实际构建时缺少 cgo 头文件，
+导致 C++ 编译失败。现有无函数包的文本测试不能证明该路径可以构建。

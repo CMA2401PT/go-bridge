@@ -79,8 +79,6 @@ Python 规划阶段被拒绝。
 ```python
 import builtins as _builtins
 
-class GoPanic(_builtins.RuntimeError): ...
-
 Text = _builtins.str
 def pair(n: _builtins.int, s: _builtins.str, f: _builtins.float) -> _builtins.tuple[_builtins.str, _builtins.bool]: ...
 ```
@@ -96,8 +94,6 @@ def pair(n: _builtins.int, s: _builtins.str, f: _builtins.float) -> _builtins.tu
 ```c
 typedef struct { char *data; size_t size; } SBString;
 typedef struct {
-    uint8_t panicked;
-    SBString panic_message;
     SBString r0;
     uint8_t r1;
 } SBResult0;
@@ -106,7 +102,7 @@ SBResult0 SBCall0(intptr_t a0, SBString a1, float a2);
 ```
 
 Go int 的具体范围由目标尺寸决定；bool 通过 uint8_t 传输。返回的第一个字符串拥有
-C 缓冲区，第二个 bool 没有资源所有权。结果还携带独立的异常标志和消息。
+C 缓冲区，第二个 bool 没有资源所有权。结果不携带 panic 信息。
 
 ## 第四步：生成两端代码
 
@@ -122,14 +118,15 @@ if r1 {
 }
 ```
 
-上面只摘出相关语句；完整函数还有 `//export`、完成标志和 defer/recover 清理路径。
+上面只摘出相关语句；完整函数还有 `//export` 和末尾的 return，不安装 defer/recover。
 
 [cppFunction](../internal/emit/bindings.go) 注册 Python 名字 pair，先调用
 `integer_arg<intptr_t>`、`string_arg`、`float_arg<float>` 转换三个输入，然后调用
-`SBCall0`。结果立即放入 `OwnedSBResult0`，检查 panicked，再构造两个元素的 tuple。
-函数退出或中途抛出 Python 异常时，owner 析构都释放结果字符串和 panic 消息。
+`SBCall0`。正常返回的结果立即放入 `OwnedSBResult0`，再构造两个元素的 tuple。
+函数退出或转换中途抛出 Python 异常时，owner 析构都释放结果字符串。
 
-`pythonSource` 从 `_native` 重新导出 pair、GoPanic，定义 Text alias 与 `__all__`。
+`pythonSource` 导入 `_native` 并重新导出 pair，定义 Text alias 与 `__all__`。
+即使包中只有 alias、没有函数，也会加载 `_native`，使目标 Go 包仍有机会执行初始化。
 `Files` 汇总上述产物并格式化 Go 源码；`publish` 最后写入输出目录。
 
 ## 编译后的调用
@@ -147,5 +144,5 @@ Python 参数
 ```
 
 把 n 换成超出 Go int 范围的整数，会在 C++ 层抛 OverflowError，Pair 尚未执行。
-目标函数的可恢复 panic 会变成 GoPanic。普通结果中包含非法 UTF-8 则在结果转换阶段
+目标函数未自行恢复的 panic 会终止整个 Python 进程。普通结果中包含非法 UTF-8 则在结果转换阶段
 抛 UnicodeDecodeError；无论在哪个结果上失败，整个结果结构中的字符串仍会被释放。

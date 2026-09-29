@@ -54,7 +54,7 @@ Go 模型保留语言中的类型身份；Python 模型描述用户会看到的�
 | 文件 | 关键函数 | 输出 |
 | --- | --- | --- |
 | [emit.go](../internal/emit/emit.go) | `Files`、`buildConfig` | 文件清单、Go 格式化、`bridge.json`、生成项目 README |
-| [adapter.go](../internal/emit/adapter.go) | `goSource`、`goOperation`、`goInput`、`goOutput` | Go cgo 导出、传输转换与 panic 处理 |
+| [adapter.go](../internal/emit/adapter.go) | `goSource`、`goOperation`、`goInput`、`goOutput` | Go cgo 导出与传输转换；不捕获 panic |
 | [bindings.go](../internal/emit/bindings.go) | `cppSource`、`cppOwner`、`cppFunction`、`cppInput`、`cppOutput` | pybind11 注册、C 调用、结果所有权 |
 | [python.go](../internal/emit/python.go) | `stubSource`、`returnAnnotation`、`pythonSource` | `.pyi` 与 Python 公开导出 |
 | [runtime.cpp.tmpl](../internal/emit/templates/runtime.cpp.tmpl) | `integer_arg`、`string_arg`、`decode` 等 | 所有绑定共用的 C++ 转换代码 |

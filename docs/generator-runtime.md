@@ -29,54 +29,43 @@
 
 ## 结果结构是一份所有权单位
 
-所有操作返回自己的 SBResultN 结构。即使 Go 函数没有返回值，结构中仍然有 panicked
-和 panic_message。零个结果映射成 None，一个结果直接返回，多个结果按顺序构造 tuple。
+有返回值的操作返回自己的 SBResultN 结构，其中只有 r0、r1 等结果字段；无返回值的
+操作使用 void ABI，不生成结果结构。Python 侧零个结果映射成 None，一个结果直接返回，
+多个结果按顺序构造 tuple。ABI 不传输 panic 状态或消息。
 
 | 资源 | 分配/提供方 | 使用期限 | 释放方 |
 | --- | --- | --- | --- |
 | 输入 SBString.data | Python 的 UTF-8 缓存 | 同步调用期间借用 | Python 管理，Go/C++ 不释放 |
 | `bridgeInput` 得到的 Go string | Go 复制输入 | 原包可以保留该 string | Go GC |
-| 普通结果 SBString.data | `bridgeString` 调用 C.CString | 到结果转换结束或失败 | C++ owner 的 std::free；Go panic 清理可能提前释放并置零 |
-| panic_message.data | `bridgePanic` → C.CString | 到异常消息转换结束或失败 | C++ owner 的 std::free |
+| 普通结果 SBString.data | `bridgeString` 调用 C.CString | 到结果转换结束或失败 | C++ owner 的 std::free |
 | 数值结果 | 按值返回 | 随结果结构 | 无需释放 |
 
 字符串长度是字节数，解码不依赖终止 NUL，所以内嵌 `\0` 不会截断字符串。空字符串
 也遵循相同的分配/释放协议。SBString 只是内部传输结构，不是向任意外部 C 调用者开放
 的安全缓冲区接口；当前适配层信任生成的 C++ 传入有效指针和长度。
 
-[cppOwner](../internal/emit/bindings.go) 为每种结果生成一个 owner。它在任何 Python
-返回对象创建前接管整个结果，析构时无条件释放 panic_message 和所有 String 结果。
+[cppOwner](../internal/emit/bindings.go) 为每种结果结构生成一个 owner。它在任何 Python
+返回对象创建前接管整个结果，析构时释放所有 String 结果。
 例如结果 `(非法 UTF-8, 第二个字符串)` 解码第一个就失败，第二个也由同一 owner 释放。
 这个约定不能改成“转换到哪个结果才开始拥有哪个结果”。
 
 生成代码不主动释放 GIL，输入 Python 对象及 UTF-8 缓存在同步调用期间有效。Go 会
 复制输入字符串后才调用原函数；原包不会因为保留 string 而持有 Python 内存。
 
-## Go panic 怎样返回
+## Go panic 直接终止宿主进程
 
-完整逻辑由 `goOperation` 生成，`adapterRuntime` 提供 `bridgePanic`：
+生成的 Go 适配函数不安装 defer/recover，直接转换参数、调用原函数、转换并返回结果。
+如果 panic 未被目标 Go 代码自身恢复，Go runtime 会终止整个宿主 Python 进程；这包括
+显式 panic、panic(nil)、整数除零、nil 解引用，以及初始化或其他 goroutine 中未恢复
+的 panic。Python 的 try/except（包括 BaseException）不能接住它。
 
-1. 命名结果 out 初始为零值，complete 初始为 false，并安装 defer。
-2. 转换输入、调用原 Go 函数、逐个转换输出。
-3. 正常完成后设置 complete 为 true，再返回。
-4. 如果未完成就开始栈展开，defer 直接调用 recover，清理已转换的 String 结果并置零，
-   写入 panicked 和 panic_message。
+生成模块不再提供 GoPanic，ABI 不再有异常标志或消息，C++ 也不检查 Go panic。
+panic 不作为 C++ 异常跨语言展开，不能依赖 C++ 析构或 Python finally 在进程终止时执行。
+前述 owner 的释放保证适用于正常返回和 C++/Python 结果转换失败，不涵盖进程终止。
+目标 Go 代码自己写的 defer/recover 仍遵循 Go 原有语义。
 
-不能只用 `recover() != nil` 判断是否发生 panic：`GODEBUG=panicnil=1` 下 panic(nil)
-的 recover 值可能为 nil，完成标志仍能识别它。异常标志也不能用消息长度代替，空字符串
-本身就是合法 panic 值。
-
-C++ 先检查 panicked。为保留 GoPanic 类型，panic 文本中的非法 UTF-8 使用替换字符
-解码，再通过 `PyErr_SetObject` 设置异常。普通结果采用严格解码，非法 UTF-8 会产生
-UnicodeDecodeError。GoPanic 是生成模块内创建的 RuntimeError 子类，目前只携带消息，
-不保留原 panic 值类型或 Go 栈。
-
-Go 清理时置零的字段仍会经过 C++ owner 析构，free(nullptr) 无操作。因此正常结果、
-panic、Python 解码失败都遵循同一所有权入口。
-
-这个恢复范围是适配函数内、当前调用 goroutine 的可恢复 panic。目标包 init 阶段、
-其他 goroutine 的 panic、运行时 fatal error 不在此保证内。C 内存分配失败等终止进程
-的行为也不能靠这层 GoPanic 转换解决。
+移除了每次调用的恢复代码、panic 结果字段和 C++ 分支；实际性能收益尚未做基准测试，
+不能仅凭删除 defer 推断提升幅度。整数入参范围检查与 UTF-8 检查仍由 C++ 执行。
 
 ## 错误发生在哪一层
 
@@ -86,8 +75,11 @@ panic、Python 解码失败都遵循同一所有权入口。
 | 整数超出目标范围，含负数传给无符号类型 | OverflowError | 否 |
 | str 含无法编码的孤立代理字符 | UnicodeEncodeError | 否 |
 | 巨大 Python int 无法转为 double | OverflowError | 否 |
-| 原函数可恢复 panic | GoPanic | 已进入 |
+| 原函数 panic 且未自行恢复 | 整个 Python 进程终止 | 已进入 |
 | 普通结果含非法 UTF-8 | UnicodeDecodeError | 已正常返回 |
+
+Go 内部整数运算溢出遵循 Go 语义，不会因上述输入检查而自动变成 OverflowError；
+例如 uint16 的 65535 加 1 得到 0。整数除零会 panic，并按上面的进程终止契约处理。
 
 `1309094` 将整数范围错误从 TypeError 修正为 OverflowError；与类型错误的区分现在由
 `integer_arg` / `integer_overflow` 实现，并由生成器集成测试验证。

@@ -18,7 +18,7 @@ package main
 typedef struct { char *data; size_t size; } SBString;
 `
 
-// adapterRuntime converts strings and panics at the boundary.
+// adapterRuntime copies strings across the boundary.
 const adapterRuntime = `
 // bridgeString copies value into C memory owned by the caller.
 func bridgeString(value string) C.SBString {
@@ -29,26 +29,24 @@ func bridgeString(value string) C.SBString {
 func bridgeInput(value C.SBString) string {
 	return string(unsafe.Slice((*byte)(unsafe.Pointer(value.data)), int(value.size)))
 }
-
-// bridgePanic describes a recovered panic value, including nil.
-func bridgePanic(reason any) C.SBString {
-	return bridgeString(fmt.Sprint(reason))
-}
 `
 
 // goSource renders the cgo adapter: one exported function per operation that
-// calls the target package, converts values and turns panics into results.
+// calls the target package and converts values. Go panics propagate normally.
 func goSource(p *abi.Package) string {
 	var b strings.Builder
 	b.WriteString(adapterPrelude)
 	for _, op := range p.Operations {
-		b.WriteString("typedef struct {\nuint8_t panicked;\nSBString panic_message;\n")
+		if len(op.Results) == 0 {
+			continue
+		}
+		b.WriteString("typedef struct {\n")
 		for i, r := range op.Results {
 			fmt.Fprintf(&b, "%s r%d;\n", r.C, i)
 		}
 		fmt.Fprintf(&b, "} %s;\n", op.Result)
 	}
-	b.WriteString("*/\nimport \"C\"\n\nimport (\n\"fmt\"\n\"unsafe\"\n\n")
+	b.WriteString("*/\nimport \"C\"\n\nimport (\n\"unsafe\"\n\n")
 	// Without operations the package is only linked, preserving its init.
 	alias := "api"
 	if len(p.Operations) == 0 {
@@ -65,19 +63,11 @@ func goSource(p *abi.Package) string {
 
 func goOperation(b *strings.Builder, op *abi.Operation) {
 	params := join(len(op.Params), func(i int) string { return fmt.Sprintf("a%d C.%s", i, op.Params[i].C) })
-	fmt.Fprintf(b, "\n//export %s\nfunc %s(%s) (out C.%s) {\n", op.Symbol, op.Symbol, params, op.Result)
-
-	// recover() alone cannot detect panic(nil) under GODEBUG=panicnil=1, so a
-	// completion flag distinguishes normal return from unwinding.
-	b.WriteString("complete := false\ndefer func() {\nif complete {\nreturn\n}\nreason := recover()\n")
-	// Release results converted before the panic; the caller only frees the
-	// panic message when panicked is set.
-	for i, r := range op.Results {
-		if r.Kind == abi.String {
-			fmt.Fprintf(b, "C.free(unsafe.Pointer(out.r%d.data))\nout.r%d = C.SBString{}\n", i, i)
-		}
+	fmt.Fprintf(b, "\n//export %s\nfunc %s(%s)", op.Symbol, op.Symbol, params)
+	if len(op.Results) > 0 {
+		fmt.Fprintf(b, " (out C.%s)", op.Result)
 	}
-	b.WriteString("out.panicked = 1\nout.panic_message = bridgePanic(reason)\n}()\n")
+	b.WriteString(" {\n")
 
 	if len(op.Results) > 0 {
 		b.WriteString(join(len(op.Results), func(i int) string { return fmt.Sprintf("r%d", i) }))
@@ -88,7 +78,10 @@ func goOperation(b *strings.Builder, op *abi.Operation) {
 	for i, r := range op.Results {
 		goOutput(b, r, fmt.Sprintf("out.r%d", i), fmt.Sprintf("r%d", i))
 	}
-	b.WriteString("complete = true\nreturn\n}\n")
+	if len(op.Results) > 0 {
+		b.WriteString("return\n")
+	}
+	b.WriteString("}\n")
 }
 
 // goInput converts a C argument to the Go parameter type.

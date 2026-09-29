@@ -3,7 +3,8 @@
 `examples/` 用于研究和定义 **Go API 应当如何映射为可用的 Python API**。
 这里的案例是代码生成器的行为参考与黄金测试。先人工验证应该生成什么，再实现生成器。
 生成器的当前能力与路线见 [`../docs/generator-plan.md`](../docs/generator-plan.md)。
-生成产物不要求逐字匹配 expected；历史案例规则有版本差异，nil/panic 统一按 09。
+生成产物不要求逐字匹配 expected；历史案例规则有版本差异：nil 表示参考 09；生成器不捕获 Go panic，
+未恢复的 panic 终止整个 Python 进程，09 的恢复实现仅保留为实验记录。
 
 ## 目录约定
 
@@ -108,7 +109,7 @@ pybind11 扩展完成，不使用 ctypes。公共工具只负责构建，不推�
 - [`06_named_type`](06_named_type/readme.md)：命名值类型、命名 slice 与 struct，ABI 由底层类型决定。
 - [`07_ptr_basic`](07_ptr_basic/readme.md)：Python 中不可寻址的值类型（标量、slice 及其命名类型）的指针，值与指针的转换和方法集。
 - [`08_multi_ptr`](08_multi_ptr/readme.md)：多级指针、命名指针，以及生成器必须补齐的依赖类型（类型闭包）。
-- [`09_nil`](09_nil/readme.md)：带类型的 nil、nil 接收者，以及把 Go panic 转为 Python 异常。
+- [`09_nil`](09_nil/readme.md)：带类型的 nil、nil 接收者，以及历史 panic 恢复实验（生成器不采用该恢复协议）。
 - 后续：数组、error、map、interface、callback 与并发等。
 
 编号代表研究顺序。后续案例如暴露旧规则的问题，应先修正文档和黄金样例，再实现

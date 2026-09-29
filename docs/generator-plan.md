@@ -17,7 +17,7 @@
 - slice（含 bytes、嵌套 slice）、命名标量与命名 slice。
 - 命名 struct、导出字段、嵌入与提升成员、值/指针接收者。
 - 普通指针、多级指针、命名指针、递归类型。
-- 带类型 nil，以及可恢复 panic → Python GoPanic。
+- 带类型 nil；Go panic 不由桥接层恢复，未恢复的 panic 直接终止宿主进程。
 
 暂不支持 any/interface（含 error）、map、channel、数组、函数值/callback、泛型
 和可变参数。包级变量、常量的导出另行设计，不沿用旧 gen 的变量导出接口。
@@ -38,13 +38,14 @@ free-threaded Python、子解释器、跨生成包的对象互操作不在当前
 - slice 包装表示不可变的 slice 头，底层数组共享；不会隐式转换成 Python list。
 - `addr()` 对 struct 原变量取地址；`ptr()`/指针构造复制输入值到新变量。
 - 不同 Go named/指针类型保持独立，转换显式进行。
+- Go 适配层不安装 defer/recover、不传输 panic；Python try/except 无法捕获 Go panic。
 - nil 统一采用 09：指针的同类包装，句柄 0，不用 None；nil 接收者交给 Go 执行。
 - 每个独立的非 nil Ref 拥有一个持有关系；Go 对象之间保存 Go 引用，不保存句柄。
 - 生成器中的 Go 类型模型、Python 接口模型、ABI 描述是不同层；生成文件不是中间表示。
 - 生成的包依赖原始 Go 包源码及其构建环境；首版不承诺源码或构建目录可搬迁。
 
-历史样例不是统一版本的快照：06–08 的 nil/panic 行为已经被 09 替代。验收依据
-是此处记录的统一规则及相应行为测试，而非复制全部历史测试断言。
+历史样例不是统一版本的快照：nil 表示以 09 为参考，但 09 的 panic 恢复协议已放弃。
+验收依据是此处记录的规则及相应行为测试，而非复制全部历史测试断言。
 
 ## 阶段与验收
 
@@ -73,23 +74,30 @@ Go 模型描述 Go 事实，不包含 Python/C ABI 名称。为 struct 补指针
 
 - [x] 建立基础值 Python 接口模型，集中处理 snake_case、参数名、保留名与冲突诊断。
 - [x] 建立 ABI 描述，使 Go 和 C++ 使用同一份签名/传输类型。
-- [x] 生成基础值函数、任意数量返回值、字符串与 panic 转换。
+- [x] 生成基础值函数、任意数量返回值、字符串；Go panic 直接交由 runtime 处理。
 - [x] 生成 `.pyi`、`__init__.py`、`py.typed`、构建入口及 CLI。
 - [x] 从 examples 01–03 实际生成、编译、导入并验证；另测数值边界、字符串错误、
-  多返回值的释放与 panic 后继续调用。
+  多返回值转换失败的释放，以及 panic 终止子进程。
 - [x] 尚未实现的后端类型明确拒绝，不因前端已能分析而宣称支持。
 
 验证：全仓 `go test ./...`、`go vet ./...` 通过；原生集成测试使用
 `GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIntegration -v`，
-实际生成并编译 01–03 及一个独立 module 的产物，Go 构建启用 cgocheck2，生成的
-`.pyi` 通过 mypy strict。运行时另外覆盖 GODEBUG=panicnil=1，确保 panic(nil)
-不会静默吞掉。平台实测范围记录于首页。
+实际生成并编译 01–03 及独立 module 的产物，Go 构建启用 cgocheck2，生成的
+`.pyi` 通过 mypy strict。panic 测试使用独立 Python 子进程，覆盖 GODEBUG=panicnil=1
+和默认模式，确保 panic(nil) 同样终止进程。平台实测范围记录于首页。
 
 ### M2 后的维护文档补充（已完成）
 
 在 M2 与 M3 之间已完成维护文档补充：按 `53cfc4b` 的模块拆分和 `1309094` 的异常
 规则重新梳理实际代码，提供模型说明、调用追踪、资源协议及扩展/验证指南。该工作
 不代表已经实现 M3 的 Ref 或 slice 后端。
+
+### M2 后的 panic 契约简化（已完成）
+
+按用户决定移除生成代码中的 recover、panic 状态/消息和 GoPanic。无返回值的 ABI
+直接返回 void；正常结果仍按原所有权协议管理。未恢复的 Go panic 终止整个 Python
+进程，目标 Go 代码自身仍可恢复。整数溢出检查与 C++/Python 转换错误保持原有契约。
+历史 09 的恢复实现保留为实验记录，不再作为生成器的 panic 验收要求。
 
 ### M3：Ref、slice 与批量传输
 
@@ -106,11 +114,11 @@ Go 模型描述 Go 事实，不包含 Python/C ABI 名称。为 struct 补指针
 - [ ] 检查 Python 名字冲突，包括转换后的字段/方法/桥接保留名。
 - [ ] 验证 06，并在组合测试中验证 03/05 的规则仍成立。
 
-### M5：指针闭包、nil 与统一异常
+### M5：指针闭包与 nil
 
 - [ ] 普通指针、多级指针、命名指针，load/store/from_value/ptr。
 - [ ] nil 同类包装、nil 接收者、nil 字段和返回值。
-- [ ] 所有可能 panic 的 Go 操作通过 ABI 返回异常；参数/部分结果所有权明确。
+- [ ] nil 解引用等 Go panic 维持终止进程的契约；正常及转换失败路径的参数/结果所有权明确。
 - [ ] 验证 07–09，包括重定向只影响一层、递归字段、Go 环、nil 不持有资源。
 
 ### M6：组合验收与使用文档

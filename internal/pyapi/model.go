@@ -84,7 +84,6 @@ func Snake(name string) string {
 
 // reserved are package-level names the generated package itself defines.
 var reserved = map[string]string{
-	"GoPanic": "bridge exception",
 	"_native": "native module",
 	"__all__": "package exports",
 }

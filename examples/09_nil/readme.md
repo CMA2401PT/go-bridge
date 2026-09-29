@@ -1,5 +1,9 @@
 # 09_nil：nil 与 panic
 
+> 本文记录手写样例的历史实现。当前生成器仅参考其 nil 表示，已放弃下文的 panic
+> 恢复协议：未恢复的 Go panic 直接终止整个 Python 进程，不提供 GoPanic。
+> 当前契约见[运行时协议](../../docs/generator-runtime.md)。
+
 本例研究 nil 指针与 Go panic 如何映射到 Python：带类型的 nil、nil 接收者、nil
 参数与返回值、指针字段，以及把 panic（含解引用 nil）转换为 Python 异常。struct
 沿用 [06](../06_named_type/readme.md)，指针沿用 [07](../07_ptr_basic/readme.md)，总体规则见

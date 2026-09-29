@@ -115,7 +115,7 @@ func integrationPython(t *testing.T) string {
 	return resolved
 }
 
-func buildAndRun(t *testing.T, python, target, name, script string) {
+func buildProject(t *testing.T, python, target, name string) string {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "generated")
 	if err := Run(Config{Target: target, Name: name, Output: out}); err != nil {
@@ -132,24 +132,80 @@ func buildAndRun(t *testing.T, python, target, name, script string) {
 			t.Fatalf("stub type check: %v\n%s", err, output)
 		}
 	}
+	return out
+}
+
+func buildAndRun(t *testing.T, python, target, name, script string) {
+	t.Helper()
+	out := buildProject(t, python, target, name)
 	check := filepath.Join(out, "check.py")
 	write(t, check, "import sys\nsys.path.insert(0, "+pythonLiteral(filepath.Join(out, ".build/python"))+")\n"+script)
-	cmd = exec.Command(python, check)
+	cmd := exec.Command(python, check)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Python behavior: %v\n%s", err, output)
-	}
-	// Also exercise legacy panic(nil) mode: recover() returns nil in this mode,
-	// so a nonnil-recover test alone would silently report success.
-	cmd = exec.Command(python, check)
-	cmd.Env = append(os.Environ(), "GODEBUG=panicnil=1")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("Python behavior with panicnil=1: %v\n%s", err, output)
 	}
 }
 
 func pythonLiteral(s string) string {
 	// Paths are encoded using a Python-compatible quoted string.
 	return "'" + strings.ReplaceAll(strings.ReplaceAll(s, "\\", "\\\\"), "'", "\\'") + "'"
+}
+
+func TestIntegrationPanicTerminatesProcess(t *testing.T) {
+	python := integrationPython(t)
+	source := module(t, `
+func PanicText() (int, string) { panic("fatal marker") }
+func PanicEmpty() { panic("") }
+func PanicNil() int { panic(nil) }
+func Divide(n int) int { return 1 / n }
+func NilDereference() int { var p *int; return *p }
+func Recovered() (result int) {
+	defer func() { if recover() != nil { result = 7 } }()
+	panic("handled by target")
+}
+`)
+	out := buildProject(t, python, source, "panic_contract")
+	setup := "import sys\nsys.path.insert(0, " + pythonLiteral(filepath.Join(out, ".build/python")) + ")\nimport panic_contract as b\n"
+	for _, tc := range []struct{ name, call, debug, message string }{
+		{"text", "b.panic_text()", "panicnil=0", "panic: fatal marker"},
+		{"empty", "b.panic_empty()", "panicnil=0", "panic:"},
+		{"nil", "b.panic_nil()", "panicnil=0", "panic:"},
+		{"legacy_nil", "b.panic_nil()", "panicnil=1", "panic:"},
+		{"divide", "b.divide(0)", "panicnil=0", "integer divide by zero"},
+		{"dereference", "b.nil_dereference()", "panicnil=0", "invalid memory address"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Run fatal calls only in child processes. A catchable Python error or
+			// a normal return must not be mistaken for the expected process exit.
+			script := setup + `assert not hasattr(b, "GoPanic")
+assert b.recovered() == 7
+print("before call", flush=True)
+try:
+    ` + tc.call + `
+except BaseException:
+    print("caught in Python", flush=True)
+    sys.exit(77)
+print("returned to Python", flush=True)
+sys.exit(78)
+`
+			cmd := exec.Command(python, "-c", script)
+			cmd.Env = append(os.Environ(), "GOTRACEBACK=single", "GODEBUG="+tc.debug)
+			output, err := cmd.CombinedOutput()
+			if _, ok := err.(*exec.ExitError); !ok {
+				t.Fatalf("expected child process failure, got %v\n%s", err, output)
+			}
+			for _, want := range []string{"before call", "panic:", tc.message} {
+				if !bytes.Contains(output, []byte(want)) {
+					t.Errorf("missing %q:\n%s", want, output)
+				}
+			}
+			for _, unwanted := range []string{"caught in Python", "returned to Python"} {
+				if bytes.Contains(output, []byte(unwanted)) {
+					t.Errorf("panic did not terminate process:\n%s", output)
+				}
+			}
+		})
+	}
 }
 
 func TestIntegrationExamples(t *testing.T) {
@@ -205,9 +261,6 @@ func Float64(v float64) float64 { return v }
 func Bool(v bool) bool { return v }
 func Void() {}
 func Many(from string, _ int) (string, int, string, bool, float64) { return from, 2, "tail", true, 1.5 }
-func Panic(s string) int { panic(s) }
-func PanicNil() int { panic(nil) }
-func PanicBadUTF8() { panic("\xff") }
 func BadUTF8() (string, string) { return "\xff", "allocated second result" }
 func Tuple() (int, string) { return 1, "ok" }
 var saved string
@@ -260,18 +313,6 @@ for v in [0, 1, None]:
 assert b.float64(2) == 2.0
 assert b.float32(1.5) == 1.5
 assert b.float64(float("inf")) == float("inf")
-for message in ["", "problem", "含中文\0suffix"]:
-    try: b.panic(message)
-    except b.GoPanic as e:
-        assert isinstance(e, RuntimeError)
-        assert str(e) == message
-    else: raise AssertionError("panic escaped")
-try: b.panic_nil()
-except b.GoPanic: pass
-else: raise AssertionError("panic(nil) swallowed")
-try: b.panic_bad_utf8()
-except b.GoPanic as e: assert str(e) == "\ufffd"
-else: raise AssertionError("invalid panic text lost GoPanic type")
 for _ in range(100):
     try: b.bad_utf8()
     except UnicodeDecodeError: pass
