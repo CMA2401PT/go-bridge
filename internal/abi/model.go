@@ -1,4 +1,11 @@
-// Package abi defines the transport contract shared by Go and C++ emitters.
+// Package abi defines the C transport contract shared by the Go and C++
+// emitters, so both sides of the dynamic library boundary agree on one
+// signature per operation.
+//
+// Ownership: a String input borrows a UTF-8 buffer for the duration of a call.
+// A String output owns C-allocated memory (freed with free), including an
+// empty string. Numeric values carry no ownership. Every result record also
+// owns its panic_message buffer, which is set only when panicked is nonzero.
 package abi
 
 import (
@@ -8,6 +15,7 @@ import (
 	"go-bridge/internal/pyapi"
 )
 
+// Kind selects the conversion used on both sides of the boundary.
 type Kind string
 
 const (
@@ -18,21 +26,24 @@ const (
 	String   Kind = "string"
 )
 
-// A String input borrows a UTF-8 buffer for the duration of a call. A String
-// output owns C-allocated memory, including an empty string. Numeric values
-// carry no ownership. Every result record also owns its panic_message buffer.
+// Type is the wire representation of one Python-facing type.
 type Type struct {
 	Python *pyapi.Type
 	Kind   Kind
-	C      string
-	Go     string
-	Bits   int
+	C      string // C type name, e.g. "int32_t" or "SBString"
+	Go     string // Go type name used to convert the wire value back
+	Bits   int    // wire width; zero for String
 }
 
+// Operation is one exported C function wrapping one Go function.
+//
+// It is declared as `Result Symbol(params...)`, where Result is a struct with
+// `uint8_t panicked; SBString panic_message;` followed by one field rN per
+// Go result.
 type Operation struct {
 	Python  *pyapi.Function
-	Symbol  string
-	Result  string
+	Symbol  string // exported C function name
+	Result  string // C name of the result struct
 	Params  []*Type
 	Results []*Type
 }
@@ -40,53 +51,68 @@ type Operation struct {
 type Package struct {
 	Python     *pyapi.Package
 	Operations []*Operation
-	IntBits    int
+	IntBits    int // width of Go int on the target; checked by the C++ side
 }
 
+// Plan assigns wire types and stable symbols. Symbols use declaration order,
+// never user-visible names, so renaming rules cannot produce C collisions.
 func Plan(p *pyapi.Package) (*Package, error) {
 	result := &Package{Python: p, IntBits: int(p.Go.Sizes.Sizeof(types.Typ[types.Int]) * 8)}
-	mapping := make(map[*pyapi.Type]*Type)
+	wire := make(map[*pyapi.Type]*Type)
 	for _, t := range p.Types {
-		basic, ok := t.Go.Go.(*types.Basic)
-		if !ok {
-			return nil, fmt.Errorf("ABI for %s is not implemented", t.Go)
+		w, err := wireType(t, p.Go.Sizes)
+		if err != nil {
+			return nil, err
 		}
-		wire := &Type{Python: t, Go: basic.Name()}
-		switch {
-		case basic.Info()&types.IsBoolean != 0:
-			wire.Kind, wire.C, wire.Bits = Boolean, "uint8_t", 8
-		case basic.Info()&types.IsString != 0:
-			wire.Kind, wire.C = String, "SBString"
-		case basic.Info()&types.IsFloat != 0:
-			wire.Kind, wire.Bits = Float, int(p.Go.Sizes.Sizeof(basic)*8)
-			wire.C = "double"
-			if wire.Bits == 32 {
-				wire.C = "float"
-			}
-		case basic.Info()&types.IsInteger != 0:
-			wire.Kind, wire.Bits = Signed, int(p.Go.Sizes.Sizeof(basic)*8)
-			prefix := "int"
-			if basic.Info()&types.IsUnsigned != 0 {
-				wire.Kind, prefix = Unsigned, "uint"
-			}
-			wire.C = fmt.Sprintf("%s%d_t", prefix, wire.Bits)
-			if basic.Kind() == types.Int || basic.Kind() == types.Uint || basic.Kind() == types.Uintptr {
-				wire.C = prefix + "ptr_t"
-			}
-		default:
-			return nil, fmt.Errorf("ABI for %s is not implemented", t.Go)
-		}
-		mapping[t] = wire
+		wire[t] = w
 	}
 	for i, f := range p.Functions {
 		op := &Operation{Python: f, Symbol: fmt.Sprintf("SBCall%d", i), Result: fmt.Sprintf("SBResult%d", i)}
 		for _, arg := range f.Params {
-			op.Params = append(op.Params, mapping[arg.Type])
+			op.Params = append(op.Params, wire[arg.Type])
 		}
 		for _, r := range f.Results {
-			op.Results = append(op.Results, mapping[r])
+			op.Results = append(op.Results, wire[r])
 		}
 		result.Operations = append(result.Operations, op)
 	}
 	return result, nil
+}
+
+func wireType(t *pyapi.Type, sizes types.Sizes) (*Type, error) {
+	basic, ok := t.Go.Go.(*types.Basic)
+	if !ok {
+		return nil, fmt.Errorf("ABI for %s is not implemented", t.Go)
+	}
+	w := &Type{Python: t, Go: basic.Name()}
+	bits := int(sizes.Sizeof(basic) * 8)
+	info := basic.Info()
+	switch {
+	case info&types.IsBoolean != 0:
+		w.Kind, w.C, w.Bits = Boolean, "uint8_t", 8
+	case info&types.IsString != 0:
+		w.Kind, w.C = String, "SBString"
+	case info&types.IsFloat != 0:
+		w.Kind, w.C, w.Bits = Float, "double", bits
+		if bits == 32 {
+			w.C = "float"
+		}
+	case info&types.IsInteger != 0:
+		w.Kind, w.Bits = Signed, bits
+		prefix := "int"
+		if info&types.IsUnsigned != 0 {
+			w.Kind, prefix = Unsigned, "uint"
+		}
+		// Word-sized Go integers use intptr_t/uintptr_t rather than a fixed
+		// width, so the C declaration matches whatever target cgo builds for.
+		switch basic.Kind() {
+		case types.Int, types.Uint, types.Uintptr:
+			w.C = prefix + "ptr_t"
+		default:
+			w.C = fmt.Sprintf("%s%d_t", prefix, bits)
+		}
+	default:
+		return nil, fmt.Errorf("ABI for %s is not implemented", t.Go)
+	}
+	return w, nil
 }

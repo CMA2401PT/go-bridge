@@ -18,12 +18,15 @@ C++ 包装类 / pybind11 注册
 分析/验证失败不会留下半个 package。生成只接收一个目标包，不把依赖包的所有声明
 也当作根 API；依赖中的类型只沿公开签名和字段进入闭包。
 
-## 建议目录与责任
+## 目录与责任
 
 - `internal/gomodel`：包加载和 Go 事实模型，诊断与确定的类型遍历顺序。
-- `internal/pyapi`：Python 类型/API 规划与命名规则；类型闭包的桥接补充。
-- `internal/abi`：传输类型、导出操作、结果/异常所有权描述。
-- `internal/emit`：消费已验证模型，生成 Go/C++/Python/stub/构建文件。
+  `model.go` 定义节点，`load.go` 负责加载与闭包构造（按类型、字段、方法集、签名拆分）。
+- `internal/pyapi`：Python 类型/API 规划与命名规则；所有用户可见名字及冲突诊断集中于此。
+- `internal/abi`：传输类型、导出操作、结果/异常所有权描述；包注释记录所有权约定。
+- `internal/emit`：消费已验证模型，按产物拆分：`adapter.go`（Go cgo 适配层）、
+  `bindings.go`（pybind11 C++）、`python.go`（`__init__.py`/`.pyi`）、`emit.go`（文件清单）。
+  `templates/` 存放原样嵌入的 C++ 运行时与 `build.py`。
 - `internal/generate`：连接流水线、输出目录约束；不推导类型语义。
 - `main.go`：CLI 参数解析与错误展示。
 

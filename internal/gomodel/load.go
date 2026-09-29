@@ -65,19 +65,24 @@ func Load(dir, target string) (*Package, error) {
 	return model, nil
 }
 
+// supportedBasics are always part of the closure, so later stages can rely on
+// them (for example for lengths and indexes) even if no signature uses them.
+var supportedBasics = []types.BasicKind{
+	types.Bool, types.Int, types.Int8, types.Int16, types.Int32, types.Int64,
+	types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64, types.Uintptr,
+	types.Float32, types.Float64, types.String,
+}
+
 // Analyze constructs a complete model or returns a contextual error. Package
 // internals are ignored; unsupported exported declarations are not skipped.
 func Analyze(pkg *types.Package, sizes types.Sizes) (*Package, error) {
 	b := &builder{model: &Package{Path: pkg.Path(), Name: pkg.Name(), Sizes: sizes}}
-	for _, kind := range []types.BasicKind{
-		types.Bool, types.Int, types.Int8, types.Int16, types.Int32, types.Int64,
-		types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64, types.Uintptr,
-		types.Float32, types.Float64, types.String,
-	} {
+	for _, kind := range supportedBasics {
 		if _, err := b.visit(types.Typ[kind], "builtin"); err != nil {
 			return nil, err
 		}
 	}
+	// Scope names are sorted, which makes node IDs deterministic.
 	for _, name := range pkg.Scope().Names() {
 		obj := pkg.Scope().Lookup(name)
 		if !obj.Exported() {
@@ -104,15 +109,22 @@ func Analyze(pkg *types.Package, sizes types.Sizes) (*Package, error) {
 	return b.model, nil
 }
 
+// builder grows the type closure. Every method takes where, a human-readable
+// path from the root declaration, used to give diagnostics context.
 type builder struct{ model *Package }
 
+// visit returns the node for t, creating it and its dependencies on first use.
 func (b *builder) visit(t types.Type, where string) (*Type, error) {
 	t = types.Unalias(t)
 	if existing := b.model.Find(t); existing != nil {
 		return existing, nil
 	}
+	// Register before expanding, so recursive types terminate.
 	n := &Type{ID: len(b.model.Types), Go: t}
 	b.model.Types = append(b.model.Types, n)
+	b.model.index.Set(t, n)
+
+	var err error
 	switch t := t.(type) {
 	case *types.Basic:
 		if t.Info()&(types.IsBoolean|types.IsInteger|types.IsFloat|types.IsString) == 0 || t.Info()&types.IsUntyped != 0 {
@@ -121,94 +133,109 @@ func (b *builder) visit(t types.Type, where string) (*Type, error) {
 		n.Kind, n.Name = Basic, t.Name()
 	case *types.Pointer:
 		n.Kind = Pointer
-		elem, err := b.visit(t.Elem(), where+" -> pointer target")
-		if err != nil {
-			return nil, err
-		}
-		n.Elem = elem
+		n.Elem, err = b.visit(t.Elem(), where+" -> pointer target")
 	case *types.Slice:
 		n.Kind = Slice
-		elem, err := b.visit(t.Elem(), where+" -> slice element")
-		if err != nil {
-			return nil, err
-		}
-		n.Elem = elem
+		n.Elem, err = b.visit(t.Elem(), where+" -> slice element")
 	case *types.Named:
-		n.Kind, n.Name = Named, t.Obj().Name()
-		if t.Obj().Pkg() != nil {
-			n.PackagePath = t.Obj().Pkg().Path()
-		}
-		if _, ok := t.Underlying().(*types.Interface); ok {
-			return nil, fmt.Errorf("%s: unsupported interface type %s", where, t)
-		}
-		if !t.Obj().Exported() {
-			return nil, fmt.Errorf("%s: non-exported named type %s is not supported", where, t)
-		}
-		if t.TypeParams().Len() != 0 || t.TypeArgs().Len() != 0 {
-			return nil, fmt.Errorf("%s: generic type %s is not supported", where, t)
-		}
-		if basic, ok := t.Underlying().(*types.Basic); ok && basic.Kind() == types.Bool {
-			return nil, fmt.Errorf("%s: named bool %s has no defined Python mapping", where, t)
-		}
-		if structure, ok := t.Underlying().(*types.Struct); ok {
-			for i := 0; i < structure.NumFields(); i++ {
-				field := structure.Field(i)
-				if !field.Exported() {
-					continue
-				}
-				ft, err := b.visit(field.Type(), where+" -> field "+field.Name())
-				if err != nil {
-					return nil, err
-				}
-				n.Fields = append(n.Fields, Field{Name: field.Name(), Type: ft, Embedded: field.Embedded(), Index: i})
-			}
-		} else {
-			underlying, err := b.visit(t.Underlying(), where+" -> underlying type")
-			if err != nil {
-				return nil, err
-			}
-			n.Underlying = underlying
-		}
-		// Method sets include promoted methods and use Go's ambiguity rules.
-		for _, pointer := range []bool{false, true} {
-			var receiver types.Type = t
-			if pointer {
-				receiver = types.NewPointer(t)
-			}
-			set := types.NewMethodSet(receiver)
-			for i := 0; i < set.Len(); i++ {
-				method := set.At(i).Obj().(*types.Func)
-				if !method.Exported() {
-					continue
-				}
-				declared := types.Unalias(method.Type().(*types.Signature).Recv().Type())
-				// Only an actual receiver declaration introduces a dependency.
-				// A promoted method on a hidden embedded type is still callable
-				// through the public owner, without exposing that hidden type.
-				if types.Identical(declared, t) || types.Identical(declared, types.NewPointer(t)) {
-					if _, err := b.visit(declared, where+" -> receiver of "+method.Name()); err != nil {
-						return nil, err
-					}
-				}
-				fn, err := b.function(method, receiver, where+" -> method "+method.Name())
-				if err != nil {
-					return nil, err
-				}
-				if pointer {
-					n.PointerMethods = append(n.PointerMethods, fn)
-				} else {
-					n.ValueMethods = append(n.ValueMethods, fn)
-				}
-			}
-		}
+		err = b.named(n, t, where)
 	default:
-		return nil, fmt.Errorf("%s: unsupported type %s (%T)", where, t, t)
+		err = fmt.Errorf("%s: unsupported type %s (%T)", where, t, t)
+	}
+	if err != nil {
+		return nil, err
 	}
 	return n, nil
 }
 
+func (b *builder) named(n *Type, t *types.Named, where string) error {
+	n.Kind, n.Name = Named, t.Obj().Name()
+	if t.Obj().Pkg() != nil {
+		n.PackagePath = t.Obj().Pkg().Path()
+	}
+	if _, ok := t.Underlying().(*types.Interface); ok {
+		return fmt.Errorf("%s: unsupported interface type %s", where, t)
+	}
+	if !t.Obj().Exported() {
+		return fmt.Errorf("%s: non-exported named type %s is not supported", where, t)
+	}
+	if t.TypeParams().Len() != 0 || t.TypeArgs().Len() != 0 {
+		return fmt.Errorf("%s: generic type %s is not supported", where, t)
+	}
+	if basic, ok := t.Underlying().(*types.Basic); ok && basic.Kind() == types.Bool {
+		return fmt.Errorf("%s: named bool %s has no defined Python mapping", where, t)
+	}
+
+	if structure, ok := t.Underlying().(*types.Struct); ok {
+		if err := b.fields(n, structure, where); err != nil {
+			return err
+		}
+	} else {
+		underlying, err := b.visit(t.Underlying(), where+" -> underlying type")
+		if err != nil {
+			return err
+		}
+		n.Underlying = underlying
+	}
+
+	var err error
+	if n.ValueMethods, err = b.methods(t, t, where); err != nil {
+		return err
+	}
+	n.PointerMethods, err = b.methods(t, types.NewPointer(t), where)
+	return err
+}
+
+func (b *builder) fields(n *Type, structure *types.Struct, where string) error {
+	for i := 0; i < structure.NumFields(); i++ {
+		field := structure.Field(i)
+		if !field.Exported() {
+			continue
+		}
+		ft, err := b.visit(field.Type(), where+" -> field "+field.Name())
+		if err != nil {
+			return err
+		}
+		n.Fields = append(n.Fields, Field{Name: field.Name(), Type: ft, Embedded: field.Embedded(), Index: i})
+	}
+	return nil
+}
+
+// methods collects the exported methods in the method set of selected, which
+// is owner or *owner. Method sets include promoted methods and follow Go's
+// ambiguity rules, so they are queried rather than derived from declarations.
+func (b *builder) methods(owner *types.Named, selected types.Type, where string) ([]*Function, error) {
+	var result []*Function
+	set := types.NewMethodSet(selected)
+	for i := 0; i < set.Len(); i++ {
+		method := set.At(i).Obj().(*types.Func)
+		if !method.Exported() {
+			continue
+		}
+		context := where + " -> method " + method.Name()
+		// Only a receiver declared on owner itself introduces a dependency
+		// (for example *owner for a pointer method). A promoted method on a
+		// hidden embedded type is still callable through the public owner,
+		// without exposing that hidden type.
+		declared := types.Unalias(method.Signature().Recv().Type())
+		if types.Identical(declared, owner) || types.Identical(declared, types.NewPointer(owner)) {
+			if _, err := b.visit(declared, where+" -> receiver of "+method.Name()); err != nil {
+				return nil, err
+			}
+		}
+		fn, err := b.function(method, selected, context)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, fn)
+	}
+	return result, nil
+}
+
+// function describes obj's signature. selected is the type whose method set
+// produced obj, or nil for a package-level function.
 func (b *builder) function(obj *types.Func, selected types.Type, where string) (*Function, error) {
-	sig := obj.Type().(*types.Signature)
+	sig := obj.Signature()
 	if sig.TypeParams().Len() != 0 {
 		return nil, fmt.Errorf("%s: generic function is not supported", where)
 	}
@@ -220,21 +247,25 @@ func (b *builder) function(obj *types.Func, selected types.Type, where string) (
 		fn.Receiver = types.Unalias(sig.Recv().Type())
 		_, fn.PointerReceiver = fn.Receiver.(*types.Pointer)
 	}
-	for _, part := range []struct {
-		label string
-		tuple *types.Tuple
-		dest  *[]Parameter
-	}{
-		{"parameter", sig.Params(), &fn.Params}, {"result", sig.Results(), &fn.Results},
-	} {
-		for i := 0; i < part.tuple.Len(); i++ {
-			v := part.tuple.At(i)
-			t, err := b.visit(v.Type(), fmt.Sprintf("%s -> %s %d (%s)", where, part.label, i+1, v.Name()))
-			if err != nil {
-				return nil, err
-			}
-			*part.dest = append(*part.dest, Parameter{Name: v.Name(), Type: t})
-		}
+	var err error
+	if fn.Params, err = b.tuple(sig.Params(), "parameter", where); err != nil {
+		return nil, err
+	}
+	if fn.Results, err = b.tuple(sig.Results(), "result", where); err != nil {
+		return nil, err
 	}
 	return fn, nil
+}
+
+func (b *builder) tuple(tuple *types.Tuple, label, where string) ([]Parameter, error) {
+	var result []Parameter
+	for i := 0; i < tuple.Len(); i++ {
+		v := tuple.At(i)
+		t, err := b.visit(v.Type(), fmt.Sprintf("%s -> %s %d (%s)", where, label, i+1, v.Name()))
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, Parameter{Name: v.Name(), Type: t})
+	}
+	return result, nil
 }

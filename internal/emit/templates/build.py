@@ -5,10 +5,13 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import sysconfig
 
 
 ROOT = Path(__file__).resolve().parent
 
+# Run in a child interpreter so setuptools' global state and argv handling
+# stay out of this script. Arguments are passed positionally.
 BUILD_EXTENSION = r'''
 import sys
 import pybind11
@@ -42,11 +45,11 @@ def main():
         suffix = ".so"
     else:
         raise SystemExit("supported platforms: macOS and Linux")
-    if not sysconfig_gil_enabled():
+    if sysconfig.get_config_var("Py_GIL_DISABLED"):
         raise SystemExit("free-threaded Python is not supported")
     try:
-        import pybind11
-        import setuptools
+        import pybind11  # noqa: F401
+        import setuptools  # noqa: F401
     except ImportError:
         raise SystemExit("this interpreter needs pybind11 and setuptools")
 
@@ -76,15 +79,12 @@ def main():
         shutil.rmtree(destination)
     shutil.copytree(ROOT / package, destination,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    # The extension finds the library beside itself through its rpath
+    # (@loader_path on macOS, $ORIGIN on Linux).
     shutil.copy2(native / filename, destination / filename)
     run([sys.executable, "-c", BUILD_EXTENSION, ROOT / "bindings.cpp", native,
          output, temporary, package, library])
     print("Built " + str(destination) + " with " + sys.executable, flush=True)
-
-
-def sysconfig_gil_enabled():
-    import sysconfig
-    return not sysconfig.get_config_var("Py_GIL_DISABLED")
 
 
 if __name__ == "__main__":

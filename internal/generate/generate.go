@@ -1,4 +1,7 @@
 // Package generate connects analysis, planning, emission and atomic publication.
+//
+// The pipeline is gomodel.Load -> pyapi.Plan -> abi.Plan -> emit.Files. All
+// files are produced in memory first, so a failure never leaves partial output.
 package generate
 
 import (
@@ -13,13 +16,15 @@ import (
 	"go-bridge/internal/pyapi"
 )
 
+// Config mirrors the command-line flags.
 type Config struct {
-	Dir    string
-	Target string
-	Name   string
-	Output string
+	Dir    string // directory Target is resolved from; default: working directory
+	Target string // Go package directory or import path
+	Name   string // Python package name; default: go_<snake_case Go package name>
+	Output string // new or empty directory receiving the generated project
 }
 
+// Run generates the project for config.Target into config.Output.
 func Run(config Config) error {
 	if config.Output == "" {
 		return fmt.Errorf("an output directory is required")
@@ -50,6 +55,7 @@ func Run(config Config) error {
 	return publish(out, files)
 }
 
+// checkOutput accepts a missing or empty real directory, never a symlink.
 func checkOutput(out string) error {
 	info, err := os.Lstat(out)
 	if os.IsNotExist(err) {
@@ -71,6 +77,8 @@ func checkOutput(out string) error {
 	return nil
 }
 
+// publish writes files into a sibling staging directory and renames it into
+// place, so readers never observe a partially written project.
 func publish(out string, files map[string][]byte) error {
 	parent := filepath.Dir(out)
 	if err := os.MkdirAll(parent, 0755); err != nil {
