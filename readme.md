@@ -59,8 +59,10 @@ string，以及由这些类型组成的函数参数和任意数量返回值。�
 clone 与批量复制。生成调用不捕获 Go panic：未恢复的 panic（含 `panic(nil)`）
 终止整个 Python 进程，不能用 Python `try/except` 捕获。详见[运行时契约](docs/generator-runtime.md)。
 
-前端已能分析 examples 01–09 的类型闭包；slice、named 包装、struct、指针的
-代码生成仍在后续阶段，遇到它们会明确报错。其他范围限制见实施计划。
+已支持命名标量与 slice、struct 构造/字段/提升字段/方法、普通/多级/命名指针，以及
+同类包装的 typed nil。生成器原生测试覆盖 examples 01–09，行为细节见
+[对象协议](docs/generator-objects.md)。any/interface（含 error）、map、channel、数组、
+泛型、可变参数、函数值、导出变量/常量及 named bool 仍明确拒绝。
 
 从仓库根目录运行：
 
@@ -106,7 +108,7 @@ GO_BRIDGE_PYTHON=python go test ./internal/generate -run TestIntegration -v
 GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIntegration -v
 ```
 
-集成测试从生成产物编译和调用，不依赖 `expected/`；包括 01–03 与独立临时 module。
+集成测试从生成产物编译和调用，不依赖 `expected/`；包括 01–09 与独立临时 module、跨包类型、组合资源与 panic 子进程。
 未设置 `GO_BRIDGE_PYTHON` 时，常规 Go 测试会明确跳过原生编译集成测试。
 
 ## 每个 example 要回答的问题
@@ -180,7 +182,7 @@ func NewPerson(name string, age int, schools []School) *Person {
 }
 ```
 
-未来生成器应尽量让 Python 用户以自然的方式使用它：
+当前接口按如下方式使用（Go 字段 Value 等桥接保留名会加下划线）：
 
 ```python
 import go_person as person
@@ -195,8 +197,7 @@ alice.name = "Alice"
 alice.say_name()
 ```
 
-这段代码表达的是长期 API 体验目标，并不表示其中涉及的 struct、slice、指针和
-方法已经获得可靠支持。
+struct、slice、指针和方法已有生成器端到端测试；这段代码用于说明它们的组合方式。
 
 ## 给后续贡献者和 agent 的工作原则
 

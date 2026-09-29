@@ -25,14 +25,14 @@
 
 ## 添加一种类型的顺序
 
-以尚未实现的 slice 为例，不能仅在 `basicName` 放行后直接拼接几段 C++。完整工作是：
+以已实现的 slice 扩展过程为例，不能仅在类型映射处放行后直接拼接几段 C++。完整工作是：
 
 1. 明确用户接口：构造输入、元素类型、是否复制、reslice/clone 的共享规则及可用操作。
 2. 检查 Go 模型信息是否足够。slice 的 Elem 已存在，额外桥接类型依赖应在接口规划
    阶段补充，而不是无条件给所有 Go 类型添加指针。
 3. 扩展 Python 模型，表达类、成员、构造与返回类型，统一完成命名和冲突检查。
-4. 扩展 ABI 操作与所有权描述。当前 Operation 只包装包级函数，不能表达完整的
-   slice 构造、读写、批量复制和释放协议。
+4. 扩展 ABI 操作与所有权描述。Operation 包装原函数/方法，Slice/Class/Field 计划
+   分别描述内建操作，Cell 明确句柄内保存的 Go 类型；两端使用同一份协议。
 5. 分别扩展 Go 导出、C++ 包装和 Python 声明，最后用同一语义案例贯通测试。
 
 某个类别尚未贯通时应保持明确拒绝，而不是生成缺少成员或不能编译的部分绑定。
@@ -41,8 +41,8 @@ named bool 的接口仍未定义；不要为完成代码而随意决定其 Pytho
 ## 需要守住的现有约定
 
 - Go 类型身份使用 go/types，不用字符串名字或底层类型代替。
-- 模型中查询 `*T` 方法集不自动产生 `*T` 类型依赖；struct `addr()` 的补型属于后续
-  Python 接口规则。接收者与方法集选择类型保持分离。
+- 模型中查询 `*T` 方法集不自动产生 `*T` 类型依赖；struct `addr()` 的补型由
+  pyapi.complete 明确执行。接收者与方法集选择类型保持分离。
 - pyapi 集中决定公开名字。输出器打印已有名字，不另外加下划线或编号掩盖冲突。
 - Go 和 C++ 消费同一个 ABI 描述。新增 Kind 时要检查 `goInput`、`goOutput`、
   `cppInput`、`cppOutput`：当前 default 分支按数值处理，新资源类型不能误落进去。
@@ -62,8 +62,14 @@ named bool 的接口仍未定义；不要为完成代码而随意决定其 Pytho
 | --- | --- |
 | [gomodel/model_test.go](../internal/gomodel/model_test.go) | 闭包与 alias、跨包同名类型；`TestMethodSetQueryDoesNotInventTypes`；01–09 的前端分析；独立 module 与构建条件 |
 | [pyapi/model_test.go](../internal/pyapi/model_test.go) | Snake、参数名、alias、名字冲突与后端拒绝边界 |
+| [gomodel/selection_test.go](../internal/gomodel/selection_test.go) | 提升字段的 Go 可见性、歧义、隐藏嵌入、指针路径和错误上下文 |
+| [pyapi/classes_test.go](../internal/pyapi/classes_test.go) | 字段/方法/生成类名冲突、桥接与 Python 内建基类保留名 |
 | [emit/emit_test.go](../internal/emit/emit_test.go) | `TestSignaturesAgreeAcrossFiles` 对照 Go/C++/stub 关键片段；无函数包仍链接原包、加载扩展；void 不带结果和 panic 协议 |
 | [generate/generate_test.go](../internal/generate/generate_test.go) | 生成确定性、输出保护；01–03 实际编译调用；独立 module、本地 replace、标量范围、字符串转换错误；独立 Python 子进程验证 panic 终止进程 |
+
+对象原生测试分在 `integration_slice_test.go`、`integration_object_test.go` 和
+`integration_pointer_test.go`，覆盖 04–09、句柄计数、GC、视图/复制/共享、多级重定向、
+Go 环、nil 接收者和 nil 解引用的致命子进程。每个生成包的声明文件也执行 mypy strict。
 
 `emit` 的文本断言能发现两端签名或导出名偏离，但不能替代编译。`gomodel` 能分析
 01–09，也不能替代对应后端的端到端验收。反复制造解码失败能检查调用是否继续工作，

@@ -78,9 +78,9 @@ func TestPublicationAndDeterminism(t *testing.T) {
 }
 
 func TestFailureDoesNotPublish(t *testing.T) {
-	source := module(t, "type Count int; func Unsupported(v Count) {}")
+	source := module(t, "func Unsupported(v map[string]int) {}")
 	out := filepath.Join(t.TempDir(), "absent")
-	if err := Run(Config{Target: source, Output: out}); err == nil || !strings.Contains(err.Error(), "not implemented yet") {
+	if err := Run(Config{Target: source, Output: out}); err == nil || !strings.Contains(err.Error(), "unsupported") {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(out); !os.IsNotExist(err) {

@@ -112,7 +112,7 @@ C 缓冲区，第二个 bool 没有资源所有权。结果不携带 panic 信�
 func SBCall0(a0 C.intptr_t, a1 C.SBString, a2 C.float) (out C.SBResult0)
 // 函数体内：
 r0, r1 := api.Pair(int(a0), bridgeInput(a1), float32(a2))
-out.r0 = bridgeString(r0)
+out.r0 = bridgeString(string(r0))
 if r1 {
     out.r1 = 1
 }

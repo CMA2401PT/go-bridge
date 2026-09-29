@@ -66,7 +66,7 @@ func Files(p *abi.Package) (map[string][]byte, error) {
 		"bridge.json":                          append(config, '\n'),
 		"README.md":                            []byte(fmt.Sprintf(readme, py.Name, g.Path)),
 	}
-	if len(p.Slices) > 0 {
+	if p.HasRefs() {
 		holder, err := format.Source([]byte(holderSource))
 		if err != nil {
 			return nil, fmt.Errorf("format holder: %w", err)

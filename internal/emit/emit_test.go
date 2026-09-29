@@ -63,7 +63,7 @@ func Pair(n int, s Text, f float32) (Text, bool) { return s, n > 0 }`)
 	contains(t, "go/main.go", out["go/main.go"],
 		"func SBCall0(a0 C.intptr_t, a1 C.SBString, a2 C.float) (out C.SBResult0)",
 		"r0, r1 := api.Pair(int(a0), bridgeInput(a1), float32(a2))",
-		"out.r0 = bridgeString(r0)")
+		"out.r0 = bridgeString(string(r0))")
 	contains(t, "bindings.cpp", out["bindings.cpp"],
 		"static_assert(sizeof(intptr_t) * 8 == 64",
 		"std::free(data.r0.data);",

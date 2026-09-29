@@ -3,7 +3,7 @@
 [文档导航](README.md) · [调用实例](generator-walkthrough.md) · [验证与排障](generator-maintenance.md)
 
 本页描述基础值与错误边界。Ref/句柄及 slice 批量传输已实现，详见
-[对象与句柄协议](generator-objects.md)；指针与 struct 后端仍在后续阶段。
+[对象与句柄协议](generator-objects.md)，其中还描述 named、struct、指针及 typed nil。
 
 ## 模块加载与 Go 初始化
 

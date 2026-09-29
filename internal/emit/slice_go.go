@@ -5,13 +5,15 @@ import (
 	"strings"
 
 	"go-bridge/internal/abi"
+	"go-bridge/internal/pyapi"
 )
 
 // goSlice renders typed buffer transfer and ordinary Go slice operations.
 // C++ validates Python indexes; internal ABI violations panic normally in Go.
 func goSlice(b *strings.Builder, s *abi.Slice) {
 	t, e := s.Type, s.Elem
-	fmt.Fprintf(b, `
+	if s.New != "" {
+		fmt.Fprintf(b, `
 //export %[1]s
 func %[1]s(data *C.%[2]s, size C.size_t) C.uintptr_t {
     input := unsafe.Slice(data, int(size))
@@ -19,13 +21,18 @@ func %[1]s(data *C.%[2]s, size C.size_t) C.uintptr_t {
     for i, v := range input { result[i] = %[4]s }
     return bridgePin(result)
 }
-//export %[5]s
-func %[5]s(handle C.uintptr_t) C.size_t { return C.size_t(len(bridgeGet[%[3]s](handle))) }
-`, s.New, e.C, t.Go, goInput(e, "v"), s.Len)
-	fmt.Fprintf(b, "\n//export %s\nfunc %s(handle C.uintptr_t, index C.size_t) (out C.%s) {\nvalue := bridgeGet[%s](handle)[int(index)]\n", s.At, s.At, e.C, t.Go)
-	goOutput(b, e, "out", "value")
+`, s.New, e.C, t.Cell, goInput(e, "v"))
+	}
+	fmt.Fprintf(b, "\n//export %s\nfunc %s(handle C.uintptr_t) C.size_t {return C.size_t(len(bridgeGet[%s](handle)))}\n", s.Len, s.Len, t.Cell)
+	goExport(b, s.At, "handle C.uintptr_t, index C.size_t", e.C)
+	if e.Python.Shape == pyapi.StructObject {
+		fmt.Fprintf(b, "value := bridgeGet[%s](handle)\nout = bridgePin(&value[int(index)])\n", t.Cell)
+	} else {
+		fmt.Fprintf(b, "value := bridgeGet[%s](handle)[int(index)]\n", t.Cell)
+		goOutput(b, e, "out", "value")
+	}
 	b.WriteString("return\n}\n")
-	fmt.Fprintf(b, "\n//export %s\nfunc %s(handle C.uintptr_t, index C.size_t, value C.%s) {\nbridgeGet[%s](handle)[int(index)] = %s\n}\n", s.Set, s.Set, e.C, t.Go, goInput(e, "value"))
+	fmt.Fprintf(b, "\n//export %s\nfunc %s(handle C.uintptr_t, index C.size_t, value C.%s) {\nbridgeGet[%s](handle)[int(index)] = %s\n}\n", s.Set, s.Set, e.C, t.Cell, goInput(e, "value"))
 	fmt.Fprintf(b, `
 //export %[1]s
 func %[1]s(handle C.uintptr_t, start, stop C.size_t) C.uintptr_t {
@@ -42,7 +49,7 @@ func %[4]s(handle C.uintptr_t, data *C.%[5]s, size C.size_t) {
     if int(size) != len(value) { panic("slice copy length mismatch") }
     output := unsafe.Slice(data, int(size))
     for i, v := range value {
-`, s.Reslice, t.Go, s.Clone, s.Copy, e.C)
+`, s.Reslice, t.Cell, s.Clone, s.Copy, e.C)
 	goOutput(b, e, "output[i]", "v")
 	b.WriteString("}\n}\n")
 }

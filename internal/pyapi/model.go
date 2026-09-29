@@ -15,9 +15,14 @@ import (
 
 // Type is the Python representation of one Go model type.
 type Type struct {
-	Go   *gomodel.Type
-	Name string // Python type name, e.g. "int" or "str"
-	Elem *Type  // slice element; nil for basic types
+	Go                        *gomodel.Type
+	Name                      string
+	ByteSlice                 bool
+	Shape                     Shape
+	Elem, Underlying, Pointer *Type
+	Fields                    []*Field
+	Constructor               []*Field
+	Methods                   []*Function
 }
 
 type Parameter struct {
@@ -89,6 +94,7 @@ var reserved = map[string]string{
 	"__all__": "package exports",
 	"Ref":     "Go ownership base",
 	"Slice":   "Go slice base",
+	"Ptr":     "Go pointer base",
 }
 
 // namespace records the origin of each claimed name, so a collision can
@@ -105,7 +111,8 @@ func (n namespace) claim(kind, name, origin string) error {
 	return nil
 }
 
-// Plan accepts the implemented backend subset. A broader Go model is
+// Plan completes g in place with bridge-required types, then plans the
+// implemented backend subset. A broader Go model is
 // never silently reduced to the declarations this backend happens to support.
 func Plan(g *gomodel.Package, name string) (*Package, error) {
 	if name == "" {
@@ -114,10 +121,13 @@ func Plan(g *gomodel.Package, name string) (*Package, error) {
 	if !identifier.MatchString(name) || keywords[name] {
 		return nil, fmt.Errorf("invalid Python package name %q", name)
 	}
+	if err := complete(g); err != nil {
+		return nil, err
+	}
 	p := &Package{Go: g, Name: name}
 	mapped := make(map[*gomodel.Type]*Type)
 	for _, t := range g.Types {
-		python, err := typeName(t)
+		python, err := className(t)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", g.Path, err)
 		}
@@ -125,8 +135,8 @@ func Plan(g *gomodel.Package, name string) (*Package, error) {
 		p.Types = append(p.Types, pt)
 		mapped[t] = pt
 	}
-	for _, t := range p.Types {
-		t.Elem = mapped[t.Go.Elem]
+	if err := planClasses(p, mapped); err != nil {
+		return nil, err
 	}
 
 	names := make(namespace)
@@ -134,7 +144,7 @@ func Plan(g *gomodel.Package, name string) (*Package, error) {
 		names[name] = origin
 	}
 	for _, t := range p.Types {
-		if t.Go.Kind == gomodel.Slice {
+		if t.Shape != Builtin {
 			if err := names.claim("name", t.Name, t.Go.String()); err != nil {
 				return nil, err
 			}
@@ -190,6 +200,9 @@ func planFunction(f *gomodel.Function, mapped map[*gomodel.Type]*Type, where str
 	params := make(namespace)
 	for i, param := range f.Params {
 		name := Snake(param.Name)
+		if f.Receiver != nil && name == "self" {
+			name = "self_"
+		}
 		if name == "" || name == "_" {
 			name = fmt.Sprintf("arg%d", i+1)
 		}
@@ -204,22 +217,10 @@ func planFunction(f *gomodel.Function, mapped map[*gomodel.Type]*Type, where str
 	return pf, nil
 }
 
-// typeName derives concrete wrapper names recursively from Go type identity.
-func typeName(t *gomodel.Type) (string, error) {
-	if t.Kind == gomodel.Slice {
-		if t.Elem.Go == types.Typ[types.Uint8] {
-			return "SliceBytes", nil
-		}
-		elem, err := typeStem(t.Elem)
-		return "Slice" + elem, err
-	}
-	return basicName(t)
-}
-
 func typeStem(t *gomodel.Type) (string, error) {
 	if t.Kind == gomodel.Basic {
 		n := t.Go.(*types.Basic).Name()
 		return strings.ToUpper(n[:1]) + n[1:], nil
 	}
-	return typeName(t)
+	return className(t)
 }

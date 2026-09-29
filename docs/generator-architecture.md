@@ -86,9 +86,9 @@ workspace 和 replace 规则继续生效；`package` 决定 Python 包名和库�
 
 ## 当前边界与后续设计
 
-目前完整链路覆盖基础值、alias、Ref 与 slice。Go 前端已经识别 named、struct 和指针，
-但这些类别的后端仍在后续阶段。对象操作的模块分工见[对象协议](generator-objects.md)。
+目前完整链路覆盖基础值、alias、Ref、slice、named、struct、方法与指针/typed nil。
+Go/ABI/Python 的对象操作分工见[对象协议](generator-objects.md)。
 
-后续生成的包装类仍放 C++，通过 pybind11 暴露；Python `__init__.py` 主要重新导出。
-struct 的 `addr()`、视图、指针类以及 slice 操作要先进入接口/ABI 模型，再扩展输出器。
-这些是[实施计划](generator-plan.md)中的任务，不是当前输出器已经具备的通用能力。
+包装类放在 C++，通过 pybind11 暴露；命名标量在 C++ 模块初始化时创建内建类型子类。
+Python `__init__.py` 只重新导出与定义 alias。`pyapi.classes` 决定字段、方法、构造参数
+和类关系；`abi.Class/Field/Slice` 规划传输和操作；输出器按计划实现，不读取 examples。

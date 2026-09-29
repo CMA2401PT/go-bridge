@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"go-bridge/internal/abi"
+	"go-bridge/internal/pyapi"
 )
 
 // cppSource renders the pybind11 module that calls the cgo exports.
@@ -14,11 +15,13 @@ func cppSource(p *abi.Package) string {
 	// The header is written by `go build -buildmode=c-shared` next to the library.
 	fmt.Fprintf(&b, "#include %q\n", "libbridge_"+p.Python.Name+".h")
 	b.WriteString(cppRuntime)
-	if len(p.Slices) > 0 {
+	if p.HasRefs() {
 		fmt.Fprintf(&b, "#include <utility>\n#include <vector>\nnamespace bridge_%s {\n", p.Python.Name)
 		b.WriteString(cppObjects)
-		for _, s := range p.Slices {
-			fmt.Fprintf(&b, "using %s = GoObject<%d, Slice>;\n", s.Type.Cpp, s.Type.Python.Go.ID)
+		for _, c := range p.Classes {
+			if c.Type.Kind == abi.Handle {
+				fmt.Fprintf(&b, "using %s = GoObject<%d, %s>;\n", c.Type.Cpp, c.Type.Python.Go.ID, cppBase(c.Type))
+			}
 		}
 		fmt.Fprintf(&b, "}\nusing namespace bridge_%s;\n", p.Python.Name)
 	}
@@ -33,11 +36,15 @@ PYBIND11_MODULE(_native, module) {
 module.doc() = "Generated Go bindings";
 `)
 	fmt.Fprintf(&b, "%s();\n", abi.InitSymbol)
-	if len(p.Slices) > 0 {
+	if p.HasRefs() {
 		cppRefClasses(&b)
-		for _, s := range p.Slices {
-			cppSlice(&b, s)
-		}
+	}
+	cppClassTypes(&b, p)
+	for _, s := range p.Slices {
+		cppSlice(&b, s)
+	}
+	for _, c := range p.Classes {
+		cppClass(&b, c)
 	}
 	for _, op := range p.Operations {
 		cppFunction(&b, op)
@@ -61,7 +68,11 @@ func cppOwner(b *strings.Builder, op *abi.Operation) {
 // before the call; results are owned before any Python object is created.
 func cppFunction(b *strings.Builder, op *abi.Operation) {
 	params := join(len(op.Params), func(i int) string { return fmt.Sprintf("py::handle a%d", i) })
-	fmt.Fprintf(b, "module.def(%q, [](%s) -> py::object {\n", op.Python.Name, params)
+	if op.Receiver == nil {
+		fmt.Fprintf(b, "module.def(%q, [=](%s) -> py::object {\n", op.Python.Name, params)
+	} else {
+		fmt.Fprintf(b, "%s.attr(%q) = py::cpp_function([=](%s) -> py::object {\n", classVar(op.Receiver), op.Python.Name, params)
+	}
 	for i, a := range op.Params {
 		fmt.Fprintf(b, "const auto v%d = %s(a%d);\n", i, cppInput(a), i)
 	}
@@ -84,6 +95,9 @@ func cppFunction(b *strings.Builder, op *abi.Operation) {
 		b.WriteString("return output;\n")
 	}
 	b.WriteString("}")
+	if op.Receiver != nil {
+		fmt.Fprintf(b, ", py::is_method(%s)", classVar(op.Receiver))
+	}
 	for _, arg := range op.Python.Params {
 		fmt.Fprintf(b, ", py::arg(%q)", arg.Name)
 	}
@@ -92,6 +106,13 @@ func cppFunction(b *strings.Builder, op *abi.Operation) {
 
 // cppInput names the runtime helper converting a Python argument.
 func cppInput(t *abi.Type) string {
+	if t.Python.Shape == pyapi.NamedValue {
+		return "read" + t.Cpp
+	}
+	return cppPrimitiveInput(t)
+}
+
+func cppPrimitiveInput(t *abi.Type) string {
 	switch t.Kind {
 	case abi.Handle:
 		return "handle_arg<" + t.Cpp + ">"
@@ -108,6 +129,14 @@ func cppInput(t *abi.Type) string {
 
 // cppOutput converts a C result field to a Python object.
 func cppOutput(t *abi.Type, field string) string {
+	raw := cppPrimitiveOutput(t, field)
+	if t.Python.Shape == pyapi.NamedValue {
+		return classVar(t) + "(" + raw + ")"
+	}
+	return raw
+}
+
+func cppPrimitiveOutput(t *abi.Type, field string) string {
 	switch t.Kind {
 	case abi.Handle:
 		return "py::cast(" + t.Cpp + "(std::exchange(" + field + ", 0)))"

@@ -61,7 +61,7 @@ func TestConflictsAndBackendBoundary(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
 		{`func URLValue() {}; func UrlValue() {}`, "collides"},
 		{`func F(from int, from_ int) {}`, "parameter"},
-		{`type Count int`, "not implemented yet"},
+		{`type SliceInt []int`, "collides"},
 	} {
 		p, err := planSource(t, tc.source)
 		if err == nil || p != nil || !strings.Contains(err.Error(), tc.want) {

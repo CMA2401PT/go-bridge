@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"go-bridge/internal/abi"
+	"go-bridge/internal/pyapi"
 )
 
 // adapterPrelude declares the C types shared by every operation.
@@ -47,12 +48,10 @@ func goSource(p *abi.Package) string {
 		fmt.Fprintf(&b, "} %s;\n", op.Result)
 	}
 	b.WriteString("*/\nimport \"C\"\n\nimport (\n\"unsafe\"\n\n")
-	// Without operations the package is only linked, preserving its init.
-	alias := "api"
-	if len(p.Operations) == 0 {
-		alias = "_"
+	for _, imp := range p.Imports {
+		fmt.Fprintf(&b, "%s %q\n", imp.Alias, imp.Path)
 	}
-	fmt.Fprintf(&b, "%s %q\n)\n", alias, p.Python.Go.Path)
+	b.WriteString(")\n")
 	b.WriteString(adapterRuntime)
 	// An export is required even without API operations: cgo emits the header,
 	// and C++ can enter Go to wait for target package initialization.
@@ -62,6 +61,9 @@ func goSource(p *abi.Package) string {
 	}
 	for _, s := range p.Slices {
 		goSlice(&b, s)
+	}
+	for _, c := range p.Classes {
+		goClass(&b, c)
 	}
 	b.WriteString("\nfunc main() {}\n")
 	return b.String()
@@ -79,8 +81,18 @@ func goOperation(b *strings.Builder, op *abi.Operation) {
 		b.WriteString(join(len(op.Results), func(i int) string { return fmt.Sprintf("r%d", i) }))
 		b.WriteString(" := ")
 	}
-	args := join(len(op.Params), func(i int) string { return goInput(op.Params[i], fmt.Sprintf("a%d", i)) })
-	fmt.Fprintf(b, "api.%s(%s)\n", op.Python.Go.Name, args)
+	offset := 0
+	target := "api." + op.Python.Go.Name
+	if op.Receiver != nil {
+		offset = 1
+		receiver := goInput(op.Receiver, "a0")
+		if op.Receiver.Python.Shape == pyapi.StructObject {
+			receiver = "bridgeGet[" + op.Receiver.Cell + "](a0)"
+		}
+		target = "(" + receiver + ")." + op.Python.Go.Name
+	}
+	args := join(len(op.Params)-offset, func(i int) string { return goInput(op.Params[i+offset], fmt.Sprintf("a%d", i+offset)) })
+	fmt.Fprintf(b, "%s(%s)\n", target, args)
 	for i, r := range op.Results {
 		goOutput(b, r, fmt.Sprintf("out.r%d", i), fmt.Sprintf("r%d", i))
 	}
@@ -92,25 +104,44 @@ func goOperation(b *strings.Builder, op *abi.Operation) {
 
 // goInput converts a C argument to the Go parameter type.
 func goInput(t *abi.Type, value string) string {
+	var result string
 	switch t.Kind {
 	case abi.Handle:
-		return "bridgeGet[" + t.Go + "](" + value + ")"
+		switch t.Python.Shape {
+		case pyapi.StructObject:
+			return "*bridgeGet[" + t.Cell + "](" + value + ")"
+		case pyapi.PointerObject:
+			result = "bridgePointer[" + t.Cell + "](" + value + ")"
+		default:
+			result = "bridgeGet[" + t.Cell + "](" + value + ")"
+		}
 	case abi.String:
-		return "bridgeInput(" + value + ")"
+		result = "bridgeInput(" + value + ")"
 	case abi.Boolean:
-		return value + " != 0"
+		result = value + " != 0"
 	default:
 		return t.Go + "(" + value + ")"
 	}
+	if t.Python.Underlying != nil {
+		return t.Go + "(" + result + ")"
+	}
+	return result
 }
 
 // goOutput stores a Go result into its C result field.
 func goOutput(b *strings.Builder, t *abi.Type, field, value string) {
 	switch t.Kind {
 	case abi.Handle:
-		fmt.Fprintf(b, "%s = bridgePin(%s)\n", field, value)
+		switch t.Python.Shape {
+		case pyapi.StructObject:
+			fmt.Fprintf(b, "%s = bridgeStruct(%s)\n", field, value)
+		case pyapi.PointerObject:
+			fmt.Fprintf(b, "if (%s) != nil {%s = bridgePin((%s)(%s))}\n", value, field, t.Cell, value)
+		default:
+			fmt.Fprintf(b, "%s = bridgePin((%s)(%s))\n", field, t.Cell, value)
+		}
 	case abi.String:
-		fmt.Fprintf(b, "%s = bridgeString(%s)\n", field, value)
+		fmt.Fprintf(b, "%s = bridgeString(string(%s))\n", field, value)
 	case abi.Boolean:
 		fmt.Fprintf(b, "if %s {\n%s = 1\n}\n", value, field)
 	default:

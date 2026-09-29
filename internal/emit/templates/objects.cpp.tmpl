@@ -10,6 +10,7 @@ struct Ref {
     ~Ref() { SBRelease(handle); }
 };
 struct Slice : Ref { using Ref::Ref; };
+struct Ptr : Ref { using Ref::Ref; };
 template<int ID, typename Base> struct GoObject : Base { using Base::Base; };
 
 // Check the actual holder before casting: pybind11 can otherwise allocate raw,

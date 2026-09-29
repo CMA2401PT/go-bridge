@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"go/types"
 
-	"go-bridge/internal/gomodel"
 	"go-bridge/internal/pyapi"
 )
 
@@ -35,12 +34,11 @@ const (
 
 // Type is the wire representation of one Python-facing type.
 type Type struct {
-	Python *pyapi.Type
-	Cpp    string // internal C++ wrapper type name for handles
-	Kind   Kind
-	C      string // C type name, e.g. "int32_t" or "SBString"
-	Go     string // Go type name used to convert the wire value back
-	Bits   int    // wire width; zero for String
+	Python      *pyapi.Type
+	Cpp         string
+	Kind        Kind
+	C, Go, Cell string
+	Bits        int
 }
 
 // Operation is one exported C function wrapping one Go function.
@@ -48,17 +46,21 @@ type Type struct {
 // Functions with results return a Result struct containing one field rN per
 // Go result. Functions without results return void and have an empty Result.
 type Operation struct {
-	Python  *pyapi.Function
-	Symbol  string // exported C function name
-	Result  string // C name of the result struct; empty for void operations
-	Params  []*Type
-	Results []*Type
+	Python   *pyapi.Function
+	Receiver *Type
+	Symbol   string // exported C function name
+	Result   string // C name of the result struct; empty for void operations
+	Params   []*Type
+	Results  []*Type
 }
 
 type Package struct {
 	Python     *pyapi.Package
 	Operations []*Operation
 	Slices     []*Slice
+	Types      []*Type
+	Classes    []*Class
+	Imports    []Import
 	IntBits    int // width of Go int on the target; checked by the C++ side
 }
 
@@ -66,48 +68,78 @@ type Package struct {
 // never user-visible names, so renaming rules cannot produce C collisions.
 func Plan(p *pyapi.Package) (*Package, error) {
 	result := &Package{Python: p, IntBits: int(p.Go.Sizes.Sizeof(types.Typ[types.Int]) * 8)}
+	qualifier := planImports(result)
 	wire := make(map[*pyapi.Type]*Type)
 	for _, t := range p.Types {
-		w, err := wireType(t, p.Go.Sizes)
+		w, err := wireType(t, p.Go.Sizes, qualifier)
 		if err != nil {
 			return nil, err
 		}
+		result.Types = append(result.Types, w)
 		wire[t] = w
 	}
-	for i, f := range p.Functions {
-		op := &Operation{Python: f, Symbol: fmt.Sprintf("SBCall%d", i)}
-		if len(f.Results) > 0 {
-			op.Result = fmt.Sprintf("SBResult%d", i)
-		}
-		for _, arg := range f.Params {
-			op.Params = append(op.Params, wire[arg.Type])
-		}
-		for _, r := range f.Results {
-			op.Results = append(op.Results, wire[r])
-		}
-		result.Operations = append(result.Operations, op)
+	for _, f := range p.Functions {
+		result.Operations = append(result.Operations, planCall(f, nil, wire, len(result.Operations)))
 	}
 	for _, t := range p.Types {
-		if t.Elem == nil {
-			continue
+		w := wire[t]
+		if t.Shape == pyapi.SliceObject {
+			prefix := fmt.Sprintf("SBType%d", t.Go.ID)
+			sl := &Slice{Type: w, Elem: wire[t.Elem], Len: prefix + "Len", At: prefix + "At", Set: prefix + "Set", Reslice: prefix + "Reslice", Clone: prefix + "Clone", Copy: prefix + "Copy"}
+			if t.Underlying == nil {
+				sl.New = prefix + "New"
+			}
+			result.Slices = append(result.Slices, sl)
 		}
-		prefix := fmt.Sprintf("SBType%d", t.Go.ID)
-		result.Slices = append(result.Slices, &Slice{Type: wire[t], Elem: wire[t.Elem],
-			New: prefix + "New", Len: prefix + "Len", At: prefix + "At", Set: prefix + "Set",
-			Reslice: prefix + "Reslice", Clone: prefix + "Clone", Copy: prefix + "Copy"})
+		if t.Shape != pyapi.Builtin {
+			c := planClass(t, wire)
+			for _, f := range t.Methods {
+				op := planCall(f, w, wire, len(result.Operations))
+				c.Methods = append(c.Methods, op)
+				result.Operations = append(result.Operations, op)
+			}
+			result.Classes = append(result.Classes, c)
+		}
 	}
 	return result, nil
 }
 
-func wireType(t *pyapi.Type, sizes types.Sizes) (*Type, error) {
-	if t.Go.Kind == gomodel.Slice {
-		return &Type{Python: t, Kind: Handle, C: "uintptr_t", Go: types.TypeString(t.Go.Go, nil), Cpp: fmt.Sprintf("Type%d", t.Go.ID)}, nil
+func planCall(f *pyapi.Function, receiver *Type, wire map[*pyapi.Type]*Type, index int) *Operation {
+	op := &Operation{Python: f, Receiver: receiver, Symbol: fmt.Sprintf("SBCall%d", index)}
+	if len(f.Results) > 0 {
+		op.Result = fmt.Sprintf("SBResult%d", index)
 	}
-	basic, ok := t.Go.Go.(*types.Basic)
+	if receiver != nil {
+		op.Params = append(op.Params, receiver)
+	}
+	for _, arg := range f.Params {
+		op.Params = append(op.Params, wire[arg.Type])
+	}
+	for _, r := range f.Results {
+		op.Results = append(op.Results, wire[r])
+	}
+	return op
+}
+
+func wireType(t *pyapi.Type, sizes types.Sizes, qualifier types.Qualifier) (*Type, error) {
+	w := &Type{Python: t, Go: types.TypeString(t.Go.Go, qualifier), Cpp: fmt.Sprintf("Type%d", t.Go.ID)}
+	if t.Shape != pyapi.Builtin && t.Shape != pyapi.NamedValue {
+		w.Kind, w.C = Handle, "uintptr_t"
+		cell := t.Go.Go
+		if t.Underlying != nil {
+			cell = t.Go.Go.Underlying()
+		}
+		if t.Shape == pyapi.StructObject {
+			cell = types.NewPointer(t.Go.Go)
+		}
+		w.Cell = types.TypeString(cell, qualifier)
+		return w, nil
+	}
+	basic, ok := t.Go.Go.Underlying().(*types.Basic)
 	if !ok {
-		return nil, fmt.Errorf("ABI for %s is not implemented", t.Go)
+		return nil, fmt.Errorf("nonbasic scalar %s", t.Go)
 	}
-	w := &Type{Python: t, Go: basic.Name()}
+
 	bits := int(sizes.Sizeof(basic) * 8)
 	info := basic.Info()
 	switch {

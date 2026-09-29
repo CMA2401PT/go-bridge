@@ -2,7 +2,6 @@ package emit
 
 import (
 	"fmt"
-	"go/types"
 	"strings"
 
 	"go-bridge/internal/abi"
@@ -12,24 +11,28 @@ func cppRefClasses(b *strings.Builder) {
 	b.WriteString(`
 py::class_<Ref>(module, "Ref");
 auto slice_base = py::class_<Slice, Ref>(module, "Slice");
+auto ptr_base = py::class_<Ptr, Ref>(module, "Ptr");
+ptr_base.attr("__class_getitem__") = py::module_::import("builtins").attr("classmethod")(
+    py::cpp_function([](py::object cls, py::object) {return cls;}));
 slice_base.attr("__iter__") = py::none();
 slice_base.attr("__reversed__") = py::none();
 slice_base.attr("__class_getitem__") = py::module_::import("builtins").attr("classmethod")(
-    py::cpp_function([](py::object cls, py::object) { return cls; }));
+    py::cpp_function([=](py::object cls, py::object) { return cls; }));
 `)
 	fmt.Fprintf(b, "module.def(\"_holder_count\", [] { return %s(); });\nmodule.def(\"_collect_go\", [] { %s(); });\n", abi.CountSymbol, abi.CollectSymbol)
 }
 
-func byteSlice(s *abi.Slice) bool { return s.Elem.Python.Go.Go == types.Typ[types.Uint8] }
+func byteSlice(s *abi.Slice) bool { return s.Type.Python.ByteSlice }
 
 func cppSlice(b *strings.Builder, s *abi.Slice) {
 	t, e := s.Type, s.Elem
-	cls := "class" + t.Cpp
-	fmt.Fprintf(b, "auto %s = py::class_<%s, Slice>(module, %q, py::is_final());\n", cls, t.Cpp, t.Python.Name)
-	cppSliceConstructor(b, s, cls)
-	fmt.Fprintf(b, `%[1]s.def("__len__", [](py::handle object) { const auto& self = checked_ref<%[2]s>(object); return %[3]s(self.handle); });
-%[1]s.def("clone", [](py::handle object) { const auto& self = checked_ref<%[2]s>(object); return %[2]s(%[4]s(self.handle)); });
-%[1]s.def("__getitem__", [](py::handle object, py::object index) -> py::object {
+	cls := classVar(t)
+	if s.New != "" {
+		cppSliceConstructor(b, s, cls)
+	}
+	fmt.Fprintf(b, `%[1]s.def("__len__", [=](py::handle object) { const auto& self = checked_ref<%[2]s>(object); return %[3]s(self.handle); });
+%[1]s.def("clone", [=](py::handle object) { const auto& self = checked_ref<%[2]s>(object); return %[2]s(%[4]s(self.handle)); });
+%[1]s.def("__getitem__", [=](py::handle object, py::object index) -> py::object {
     const auto& self = checked_ref<%[2]s>(object);
     size_t size = %[3]s(self.handle);
     if (py::isinstance<py::slice>(index)) {
@@ -42,7 +45,7 @@ func cppSlice(b *strings.Builder, s *abi.Slice) {
     owned.values[0] = %[8]s(self.handle, slice_index(index, size));
     return %[9]s;
 });
-%[1]s.def("__setitem__", [](py::handle object, py::object index, py::object value) {
+%[1]s.def("__setitem__", [=](py::handle object, py::object index, py::object value) {
     const auto& self = checked_ref<%[2]s>(object);
     size_t i = slice_index(index, %[3]s(self.handle));
     auto v = %[10]s(value);
@@ -54,7 +57,7 @@ func cppSlice(b *strings.Builder, s *abi.Slice) {
 
 func cppSliceConstructor(b *strings.Builder, s *abi.Slice, cls string) {
 	t, e := s.Type, s.Elem
-	fmt.Fprintf(b, "%s.def(py::init([](py::object values) {\n", cls)
+	fmt.Fprintf(b, "%s.def(py::init([=](py::object values) {\n", cls)
 	if byteSlice(s) {
 		b.WriteString("if (!PyBytes_Check(values.ptr())) throw py::type_error(\"expected bytes\");\n")
 		fmt.Fprintf(b, "return %s(%s(reinterpret_cast<%s*>(PyBytes_AS_STRING(values.ptr())), static_cast<size_t>(PyBytes_GET_SIZE(values.ptr()))));\n", t.Cpp, s.New, e.C)
@@ -80,7 +83,7 @@ func cppDeleter(t *abi.Type) string {
 
 func cppSliceCopy(b *strings.Builder, s *abi.Slice, cls string) {
 	t, e := s.Type, s.Elem
-	fmt.Fprintf(b, `%s.def("copy_to_py_list", [](py::handle object) {
+	fmt.Fprintf(b, `%s.def("copy_to_py_list", [=](py::handle object) {
     const auto& self = checked_ref<%s>(object);
     size_t size = %s(self.handle);
     OwnedBuffer<%s, %s> owned(size);
@@ -91,7 +94,7 @@ func cppSliceCopy(b *strings.Builder, s *abi.Slice, cls string) {
 });
 `, cls, t.Cpp, s.Len, e.C, cppDeleter(e), s.Copy, cppOutput(e, "owned.values[i]"))
 	if byteSlice(s) {
-		fmt.Fprintf(b, `%s.def("copy_to_py_bytes", [](py::handle object) {
+		fmt.Fprintf(b, `%s.def("copy_to_py_bytes", [=](py::handle object) {
     const auto& self = checked_ref<%s>(object);
     size_t size = %s(self.handle);
     auto output = py::reinterpret_steal<py::bytes>(PyBytes_FromStringAndSize(nullptr, static_cast<Py_ssize_t>(size)));

@@ -22,8 +22,8 @@
 
 Go 前端可以分析 examples 01–09 中的类型与 API 依赖。Python/ABI/生成后端目前只
 支持基础 bool、整数、浮点数、string、它们的真正 alias，以及基础值函数、多返回值、字节和嵌套 slice。
-Go panic 不由桥接层捕获，未恢复的 panic 终止整个 Python 进程。named 类型包装、
-struct、指针的后端还未实现。只有 alias 或没有公开声明的包也可构建导入，
+Go panic 不由桥接层捕获，未恢复的 panic 终止整个 Python 进程。named 类型、struct、
+字段/方法、普通/多级/命名指针与 typed nil 已通过 06–09 的原生测试。只有 alias 或没有公开声明的包也可构建导入，
 导入会通过内部初始化入口等待 Go init 完成。
 
 “类型闭包中有这个节点”与“可以为这个类型生成可运行绑定”是两个不同的验收条件。

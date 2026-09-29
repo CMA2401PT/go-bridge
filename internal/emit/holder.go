@@ -9,9 +9,9 @@ package main
 */
 import "C"
 import (
-    "runtime"
-    "runtime/cgo"
-    "sync/atomic"
+"runtime"
+"runtime/cgo"
+"sync/atomic"
 )
 var bridgeRoots atomic.Int64
 func bridgePin[T any](value T) C.uintptr_t {
@@ -19,8 +19,13 @@ func bridgePin[T any](value T) C.uintptr_t {
     bridgeRoots.Add(1)
     return C.uintptr_t(h)
 }
+func bridgeStruct[T any](value T) C.uintptr_t { return bridgePin(&value) }
 func bridgeGet[T any](handle C.uintptr_t) T {
     return cgo.Handle(handle).Value().(T)
+}
+func bridgePointer[T any](handle C.uintptr_t) T {
+    if handle == 0 { var zero T; return zero }
+    return bridgeGet[T](handle)
 }
 //export SBRelease
 func SBRelease(handle C.uintptr_t) {

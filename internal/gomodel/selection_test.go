@@ -113,3 +113,21 @@ func TestUnsupportedPromotedFieldHasContext(t *testing.T) {
 		}
 	}
 }
+
+func TestEnsureFailureInvalidatesPackage(t *testing.T) {
+	p, err := analyzeSource(t, "type Good int")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := types.NewPointer(types.NewMap(types.Typ[types.String], types.Typ[types.Int]))
+	_, first := p.Ensure(bad, "bad pointer")
+	if first == nil {
+		t.Fatal("unsupported type accepted")
+	}
+	for _, typ := range []types.Type{bad, types.Typ[types.Int]} {
+		node, err := p.Ensure(typ, "retry")
+		if node != nil || err != first {
+			t.Fatalf("failed package reused: %v, %v", node, err)
+		}
+	}
+}

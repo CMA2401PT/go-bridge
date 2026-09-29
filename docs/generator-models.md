@@ -106,17 +106,21 @@ Python 表示；将来解决该映射时，也必须移除此处的限制。
 [pyapi.Plan](../internal/pyapi/model.go) 将 Go 节点映射成 Python 节点。每个 Python 节点
 仍引用原 Go 节点，所以 int8 与 int64 虽然 `Name` 都是 `int`，也不会被错误合并。
 
-当前 `typeName` 支持 Basic 和 Slice；基础类型映射到 bool/int/float/str，slice 递归
-生成具体类名。只要 Go 模型包含未支持节点，整个规划失败。alias 可以重新导出，但 named
-类型即使底层是 int，目前也不会悄悄退化成 Python int。
+`className` 保留 named 类型名字，并为无名 slice/pointer 递归生成名字。
+`planClasses` 记录 Shape、Elem、Underlying、Pointer、可见字段、构造字段和选定的方法集。
+Shape 区分内建值、命名标量、slice、struct 和 pointer；ByteSlice 决定字节专用传输接口。
+这些信息集中规划，输出器不自行决定类型关系。alias 重新导出同一个 Python 类型。
+命名标量是独立的 int/float/str 子类，不能当成无名类型丢弃其身份。
 
 `planFunction` 决定函数和参数名：`Snake` 处理连续缩写、大小写边界，`avoidKeyword`
 给关键字加 `_`；无名和 `_` 参数按原位置变成 arg1、arg2。数字留在词内，如 Value2
 变成 value2。一个 `namespace` 检查包级名字，另一个检查每个函数的参数名。冲突报出
-双方来源；当前保留 _native、__all__、Ref、Slice。
+双方来源；当前保留 _native、__all__、Ref、Slice、Ptr。
 
-函数、方法、字段未来都应使用这里的命名规划，但当前模型已有包级函数、slice 类及 alias，
-尚无成员名字空间、字段属性、构造参数或桥接保留成员的实现。
+`memberName` 统一字段/方法名字：桥接保留成员加 `_`，例如 Value → value_；命名标量
+还避开其 Python 内建基类成员，例如 Go string 方法 Join → join_，保留 str.join。
+重命名后仍检查字段、方法之间的冲突。T 与 *T 使用相同拼写；方法参数 self 变成 self_。
+不同 Go 类型生成相同类名（含不同包中的同名 named）时报错，不自动编号掩盖冲突。
 
 ## ABI 模型：补回 Python 类型名无法表达的信息
 
@@ -127,14 +131,18 @@ Python 表示；将来解决该映射时，也必须移除此处的限制。
 `abi.InitSymbol` 固定为 SBInit，表示模块加载时调用的内部 void(void) 初始化入口。
 它不来自目标包的公开声明，不属于 Python 函数，也不占用业务操作的序号。
 
-每个 `Operation` 当前对应一个原 Go 函数，保存参数和返回类型、`SBCallN` 符号及
+每个 `Operation` 对应一个原 Go 函数或选定的方法；方法额外带 Receiver，保存参数和返回类型、`SBCallN` 符号及
 `SBResultN` 结果结构名（仅有返回值时）；无返回值时 Result 为空，对应 void ABI。
-序号来自模型中已排序的函数顺序，不是文件中的声明顺序。
+序号先分配给包级函数，再按类型闭包顺序分配给方法，不依据源文件声明顺序。
 相同输入可重复生成；在前面插入函数会改变后续序号，因此没有跨版本二进制兼容承诺。
 
 结果结构只包含原函数的返回值，不承载 panic。String/Handle 所有权由包注释、`Kind` 和输出器的共同约定表达，
-尚无独立的“所有权字段”或一般操作体模型。添加句柄、批量传输或字段操作时，要先
-补充这些协议概念；只新增一个 `Kind` 并不足以获得后端支持。
+参数按传输类型借用，结果按传输类型拥有资源；Type.Cell 明确 Go holder 中保存的类型，
+Type.Go 明确调用原 API 时的类型。新资源类型须先定义其所有权协议再扩展输出器。
 
 `abi.Slice` 单独描述具体 slice 的元素类型和批量/索引操作符号，Go/C++ 输出器共享
 这份计划。它与包级函数 Operation 分工不同，不将缓冲区操作伪装成目标包函数。
+
+`abi.Class` 记录具体类型的构造、复制、取地址、load/store、显式转换和字段操作；不存在
+的操作用空符号表示。`abi.Field` 绑定已规划的公开选择器与传输类型。`planImports` 为
+目标包分配 api，为依赖包按路径排序分配 depN，供 types.TypeString 正确渲染 Go 类型。

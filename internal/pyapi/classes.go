@@ -1,0 +1,172 @@
+package pyapi
+
+import (
+	"fmt"
+	"go/types"
+	"strings"
+
+	"go-bridge/internal/gomodel"
+)
+
+// Shape describes the Python object's semantics, independently of its Go name.
+type Shape string
+
+const (
+	Builtin       Shape = "builtin"
+	NamedValue    Shape = "named-value"
+	SliceObject   Shape = "slice"
+	StructObject  Shape = "struct"
+	PointerObject Shape = "pointer"
+)
+
+// Field contains a visible Go selector and its single shared Python spelling.
+// Direct fields also appear as optional constructor keywords.
+type Field struct {
+	Go   gomodel.Selection
+	Name string
+	Type *Type
+}
+
+func shape(t *gomodel.Type) Shape {
+	switch t.Kind {
+	case gomodel.Basic:
+		return Builtin
+	case gomodel.Slice:
+		return SliceObject
+	case gomodel.Pointer:
+		return PointerObject
+	case gomodel.Named:
+		if t.Underlying == nil {
+			return StructObject
+		}
+		switch t.Underlying.Kind {
+		case gomodel.Basic:
+			return NamedValue
+		case gomodel.Slice:
+			return SliceObject
+		case gomodel.Pointer:
+			return PointerObject
+		}
+	}
+	panic("unsupported Go model kind")
+}
+
+// planClasses resolves shape-specific members once, before either backend runs.
+func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
+	for _, t := range p.Types {
+		t.Shape = shape(t.Go)
+		t.Underlying = mapped[t.Go.Underlying]
+		base := t.Go
+		if base.Underlying != nil {
+			base = base.Underlying
+		}
+		t.Elem = mapped[base.Elem]
+		t.ByteSlice = t.Shape == SliceObject && t.Elem.Go.Go == types.Typ[types.Uint8]
+		t.Pointer = mapped[p.Go.Find(types.NewPointer(t.Go.Go))]
+	}
+	for _, t := range p.Types {
+		if t.Shape == StructObject {
+			for _, f := range t.Go.Selectable {
+				t.Fields = append(t.Fields, &Field{Go: f, Name: memberName(t, f.Name), Type: mapped[f.Type]})
+			}
+			for _, f := range t.Go.Fields {
+				for _, selected := range t.Fields {
+					if selected.Go.Name == f.Name {
+						t.Constructor = append(t.Constructor, selected)
+						break
+					}
+				}
+			}
+		}
+	}
+	for _, t := range p.Types {
+		var methods []*gomodel.Function
+		switch t.Shape {
+		case StructObject:
+			methods = t.Go.PointerMethods
+		case NamedValue, SliceObject:
+			methods = t.Go.ValueMethods
+		case PointerObject:
+			if t.Go.Kind == gomodel.Pointer {
+				methods = t.Elem.Go.PointerMethods
+			}
+			if t.Elem.Shape == StructObject {
+				t.Fields = t.Elem.Fields
+			}
+		}
+		names := make(namespace)
+		for _, field := range t.Fields {
+			if err := names.claim("member", field.Name, t.Go.String()+"."+field.Go.Name); err != nil {
+				return err
+			}
+		}
+		for _, method := range methods {
+			planned, err := planFunction(method, mapped, t.Go.String()+"."+method.Name)
+			if err != nil {
+				return err
+			}
+			planned.Name = memberName(t, method.Name)
+			if err := names.claim("member", planned.Name, t.Go.String()+"."+method.Name); err != nil {
+				return err
+			}
+			t.Methods = append(t.Methods, planned)
+		}
+	}
+	return nil
+}
+
+// T and *T share one spelling, including bridge-reserved member renaming.
+var bridgeMembers = map[string]bool{
+	"value": true, "is_nil": true, "nil": true, "from_value": true, "addr": true, "ptr": true,
+	"clone": true, "copy_to_py_list": true, "copy_to_py_bytes": true, "unname": true,
+}
+
+func memberName(owner *Type, name string) string {
+	name = Snake(name)
+	if bridgeMembers[name] || builtinMember(owner, name) {
+		name += "_"
+	}
+	return name
+}
+
+// className gives named Go types their public name, and derives only unnamed
+// slice/pointer names. Distinct types with equal spellings are rejected later.
+func className(t *gomodel.Type) (string, error) {
+	if t.Kind == gomodel.Named {
+		return avoidKeyword(t.Name), nil
+	}
+	if t.Kind == gomodel.Pointer {
+		elem, err := typeStem(t.Elem)
+		return "Ptr" + elem, err
+	}
+	if t.Kind == gomodel.Slice {
+		if t.Elem.Go == types.Typ[types.Uint8] {
+			return "SliceBytes", nil
+		}
+		elem, err := typeStem(t.Elem)
+		return "Slice" + elem, err
+	}
+	if t.Kind == gomodel.Basic {
+		return basicName(t)
+	}
+	return "", fmt.Errorf("no Python mapping for %s", t)
+}
+
+// Named scalar methods must not replace the Python builtin's own protocol.
+// Apply the same spelling to *T so a Go method keeps its name across receivers.
+func builtinMember(owner *Type, name string) bool {
+	if owner.Shape == PointerObject {
+		owner = owner.Elem
+	}
+	if owner.Shape != NamedValue {
+		return false
+	}
+	names := builtinMembers[owner.Underlying.Name]
+	return strings.Contains(" "+names+" ", " "+name+" ")
+}
+
+var builtinMembers = map[string]string{
+	"int":   "as_integer_ratio bit_count bit_length conjugate denominator from_bytes imag is_integer numerator real to_bytes from_number",
+	"float": "as_integer_ratio conjugate fromhex hex imag is_integer real from_number",
+	"str":   "capitalize casefold center count encode endswith expandtabs find format format_map index isalnum isalpha isascii isdecimal isdigit isidentifier islower isnumeric isprintable isspace istitle isupper join ljust lower lstrip maketrans partition removeprefix removesuffix replace rfind rindex rjust rpartition rsplit rstrip split splitlines startswith strip swapcase title translate upper zfill",
+}
