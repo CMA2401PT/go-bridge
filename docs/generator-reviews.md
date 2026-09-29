@@ -54,3 +54,17 @@ Claude 在独立 index 快照上运行 vet、全部原生/cgocheck2/mypy 测试�
 
 采纳审查的注释/排版建议；相等、deepcopy/pickle 的未支持边界写入验收文档，
 不在本轮新增协议入口。Go panic 始终不由桥接层恢复。
+
+## M6：组合验收与文档（审查通过）
+
+Claude 用变异测试确认消费者 assert_type、带错误码的负例和 unused-ignore 检查确实有效，
+并确认显式文件列表中的 holder TestRoots 实际执行。跨包同名诊断、递归对象、确定性、
+致命子进程断言和文档矩阵均无阻塞。
+
+采纳两项证据边界修正：纯 Go holder 测试主要验证 race 与根计数；原生扩展验收构建
+额外启用 checkptr=2，与 cgocheck2 一起覆盖 C 缓冲区路径。Claude 通过动态库构建信息
+核对两个开关实际生效。holder 测试在 GC 前释放其他根，文档仍明确“GC 后可读”只是
+行为证据，未用 weak 独立观测回收。保活依赖 runtime/cgo.Handle 的根语义。
+
+最新全量原生/mypy 套件、holder race/checkptr/cgocheck2、普通测试、vet、格式与文档
+链接检查均通过。审查没有要求新增 equality/deepcopy/pickle 协议，保留其未支持边界。

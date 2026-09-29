@@ -89,11 +89,15 @@ GO_BRIDGE_PYTHON=python go test ./internal/generate -run TestIntegration -count=
 GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIntegration -count=1 -v
 ```
 
-`buildProject` 给 Go 构建启用 cgocheck2；`buildAndRun` 执行正常行为与 Python 异常测试。
+`buildProject` 给 Go 构建启用 cgocheck2 与 checkptr=2；`buildAndRun` 执行正常行为与 Python 异常测试。
 `TestIntegrationPanicTerminatesProcess` 将各个致命调用放在独立 Python 子进程中，验证
 panic、除零和 nil 解引用无法被 Python 捕获；panic(nil) 覆盖默认与 GODEBUG=panicnil=1
 模式，并确认目标 Go 代码自身的 recover 仍有效。mypy 检查生成的 `.pyi`；脚本另执行
 声明文件并检查部分注解，防止 int/tuple 等公开函数遮蔽内建类型。
+`acceptance_test.go` 还以真实消费者代码验证 mypy 推断与错误拒绝，用递归对象检查
+生成确定性；句柄测试用 race 验证并发创建/释放、浅复制和最终根计数，GC 后检查
+字段视图仍可读取。纯 Go 句柄测试虽额外开启 checkptr/cgocheck2，但实际的缓冲区与
+C 边界覆盖来自原生扩展测试。它不代表任意目标 Go 包都不存在数据竞争。
 
 `TestIntegrationWithoutFunctions` 实际构建只有 alias 和没有公开声明的包，使用延迟
 初始化写入文件来检查 import 返回前 Go init 已完成；`TestIntegrationPanicDuringImport`
@@ -109,7 +113,7 @@ panic、除零和 nil 解引用无法被 Python 捕获；panic(nil) 覆盖默认
 | --- | --- |
 | Go 包加载失败、多包匹配、package main | `gomodel.Load`，检查 target、`-dir` 与 Go 环境 |
 | “unsupported type” 并带字段/参数路径 | `gomodel.visit/named/tuple`，确认是支持域限制还是漏收集 |
-| “current backend supports basic values only” | `pyapi.basicName`，前端支持但当前后端未贯通 |
+| 无 Python 映射或成员命名冲突 | `pyapi.className/planClasses`，核对形态、方法集与保留名 |
 | Python 名字冲突 | `namespace.claim` 及产生两个名字的声明 |
 | 生成的 Go 格式化失败 | `emit.Files` 与对应 `adapter.go` 输出分支 |
 | 构建 Go 动态库失败 | 生成的 `go/main.go`、原包依赖；确认原源码目录仍存在 |

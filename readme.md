@@ -26,7 +26,7 @@ C ABI；pybind11 扩展再调用该 ABI，并向 Python 暴露 CPython 原生扩
 
 ## 当前阶段：根据样例实现生成器
 
-已经开始根据 examples 01–09 重写生成器。完整路线、阶段状态与支持范围见
+生成器已覆盖 examples 01–09，并完成原生编译、行为与类型声明验收。完整路线、阶段状态与支持范围见
 [`docs/generator-plan.md`](docs/generator-plan.md)，模块边界见
 [`docs/generator-architecture.md`](docs/generator-architecture.md)。每个可验证阶段单独提交。
 
@@ -109,6 +109,7 @@ GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIn
 ```
 
 集成测试从生成产物编译和调用，不依赖 `expected/`；包括 01–09 与独立临时 module、跨包类型、组合资源与 panic 子进程。
+消费者类型检查、holder race、原生 cgocheck2/checkptr 及未验证范围见[验收记录](docs/generator-acceptance.md)。
 未设置 `GO_BRIDGE_PYTHON` 时，常规 Go 测试会明确跳过原生编译集成测试。
 
 ## 每个 example 要回答的问题

@@ -173,11 +173,10 @@ func Plan(g *gomodel.Package, name string) (*Package, error) {
 	return p, nil
 }
 
-// basicName maps a basic Go type to its Python builtin. Other kinds are
-// rejected until the backend can bind them.
+// basicName maps a basic Go type to its Python builtin.
 func basicName(t *gomodel.Type) (string, error) {
 	if t.Kind != gomodel.Basic {
-		return "", fmt.Errorf("binding generation for %s is not implemented yet (current backend supports basic values only)", t)
+		return "", fmt.Errorf("expected a basic Go type, got %s", t)
 	}
 	info := t.Go.(*types.Basic).Info()
 	switch {

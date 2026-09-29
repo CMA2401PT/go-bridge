@@ -96,6 +96,10 @@ nil() 创建同一具体指针类的零句柄，is_nil 直接检查句柄；不�
 nil 返回值不创建 Go 持有关系。nil 接收者原样传给 Go，方法可以合法处理 nil；真正
 解引用 nil（含 value、字段、值接收者方法）直接终止整个 Python 进程。
 
+当前未映射 Go 指针相等或 struct 值相等。Ref 的 Python 身份不等于 Go 目标地址，
+不要用两个包装对象的 == 判断它们是否指向同一 Go 对象；nil 使用 is_nil 判断。
+除 struct 的 copy.copy 外，deepcopy、pickle 和标量字段取地址也不在已实现协议内。
+
 ## 输出器入口
 
 - `objects_go.go`：构造、复制、显式转换、指针 load/store、字段视图及赋值。

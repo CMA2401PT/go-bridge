@@ -101,6 +101,9 @@ Python 表示；将来解决该映射时，也必须移除此处的限制。
 依赖路径，包含 API 来源或 bridge addr 来源。ptr() 的存在取决于补全后的闭包中是否
 存在 *T，不区分其来源。这一模型准备工作本身不代表新类型后端已通过验收。
 
+`Ensure` 扩展失败后，该 Package 必须整体丢弃；后续 Ensure 返回首次错误，
+不会把依赖尚未展开完的节点当成成功结果返回。Analyze 失败时不返回 Package。
+
 ## Python 模型：确定公开接口
 
 [pyapi.Plan](../internal/pyapi/model.go) 将 Go 节点映射成 Python 节点。每个 Python 节点
@@ -145,4 +148,5 @@ Type.Go 明确调用原 API 时的类型。新资源类型须先定义其所有�
 
 `abi.Class` 记录具体类型的构造、复制、取地址、load/store、显式转换和字段操作；不存在
 的操作用空符号表示。`abi.Field` 绑定已规划的公开选择器与传输类型。`planImports` 为
-目标包分配 api，为依赖包按路径排序分配 depN，供 types.TypeString 正确渲染 Go 类型。
+实际被 Go 适配代码引用的目标包分配 api，未引用时 blank import 仍触发初始化；
+依赖包按路径排序分配 depN，供 types.TypeString 正确渲染 Go 类型。

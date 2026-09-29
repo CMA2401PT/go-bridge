@@ -122,7 +122,9 @@ func buildProject(t *testing.T, python, target, name string) string {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(python, filepath.Join(out, "build.py"))
-	cmd.Env = append(os.Environ(), "GOEXPERIMENT=cgocheck2")
+	// Exercise actual C-buffer paths with checkptr. This test-only final
+	// -gcflags overrides any earlier -gcflags in the caller's GOFLAGS.
+	cmd.Env = append(os.Environ(), "GOEXPERIMENT=cgocheck2", "GOFLAGS="+os.Getenv("GOFLAGS")+" -gcflags=all=-d=checkptr=2")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, output)
 	}
