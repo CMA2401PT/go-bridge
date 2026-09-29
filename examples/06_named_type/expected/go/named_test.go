@@ -81,3 +81,28 @@ func TestReceiversAndCopies(t *testing.T) {
 		t.Fatal("pin leaked")
 	}
 }
+
+func TestStructPointerSharesOrCopies(t *testing.T) {
+	baseline := holderCount()
+	id := SBNewMyNamedStruct(0, 1, 0, 0, 0)
+	alias := SBMyNamedStructAlias(id)
+	copied := SBMyNamedStructCopy(id)
+	if alias == id || Get[*api.MyNamedStruct](alias) != Get[*api.MyNamedStruct](id) {
+		t.Fatal("addr must pin a new handle to the same struct")
+	}
+	if Get[*api.MyNamedStruct](copied) == Get[*api.MyNamedStruct](id) {
+		t.Fatal("from_value must allocate a new struct")
+	}
+	Get[*api.MyNamedStruct](copied).BasicMemberValue = 5
+	SBMyNamedStructStore(alias, copied)
+	if Get[*api.MyNamedStruct](id).BasicMemberValue != 5 ||
+		Get[*api.MyNamedStruct](alias) == Get[*api.MyNamedStruct](copied) {
+		t.Fatal("*p = v must copy the struct in")
+	}
+	for _, handle := range list(id, alias, copied) {
+		SBUnPin(handle)
+	}
+	if holderCount() != baseline {
+		t.Fatal("pin leaked")
+	}
+}

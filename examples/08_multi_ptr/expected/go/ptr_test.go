@@ -50,7 +50,8 @@ func TestNamedPointerAndStructPointer(t *testing.T) {
 		t.Fatal("named pointer conversions must share the variable")
 	}
 	box := SBNewBox(1, 0)
-	pp := SBNewPtrPtrBox(box)
+	boxPtr := SBBoxAlias(box)
+	pp := SBNewPtrPtrBox(boxPtr)
 	if *Get[**api.Box](pp) != Get[*api.Box](box) {
 		t.Fatal("**Box must hold the same *Box")
 	}
@@ -58,7 +59,7 @@ func TestNamedPointerAndStructPointer(t *testing.T) {
 	if Get[*api.Box](box).Count != 2 {
 		t.Fatal("struct not shared through **Box")
 	}
-	for _, handle := range list(p, named, back, box, pp) {
+	for _, handle := range list(p, named, back, box, boxPtr, pp) {
 		SBUnPin(handle)
 	}
 	if holderCount() != baseline {

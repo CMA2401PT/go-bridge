@@ -32,15 +32,15 @@ bridge.append_slice_int(s, 2)           # *s = append(*s, 2)
 assert s.value.copy_to_py_list() == [1, 2]
 ```
 
-## 何时生成指针类
+## 不可寻址的值
 
-**只有当值类在 Python 中不可寻址时，才生成独立的指针类。**
+本例的基类型在 Python 中都**不可寻址**：
 
-- struct 包装对象已经持有 `*T`（06），`*T` 参数、指针接收者方法直接用同一个类，
-  不另设指针类。
 - 命名 int 在 Python 中是按值传递的 int 子类，没有 Go 存储。SliceInt 在 Python
   中是不可变的 slice 头，赋值只产生别名。二者都没有可被改写的单元，`*T` 必须是
-  另一个持有 Go 变量的对象。
+  另一个持有 Go 变量的对象，取地址只能先复制（`ptr()`）。
+- struct 包装对象本身是 Go 变量，可以直接取地址 `addr()`；它的指针类 `PtrT` 与
+  本例规则相同，见 [06](../06_named_type/readme.md)。
 
 ## 值 ↔ 指针
 
@@ -129,6 +129,6 @@ MYPYPATH=examples/.build/07_ptr_basic/python mypy examples/07_ptr_basic/test.py 
 ## 对未来生成器的要求
 
 生成器需要判断每个指针的基类型在 Python 中是否可寻址（struct 可寻址，标量、
-slice 及其命名类型不可寻址），为不可寻址的基类型生成 `Ptr<T>` 类及
-New / Load / Store 导出，并在可挂方法的值类上生成 `ptr()`；需要方法集（值类只挂
+slice 及其命名类型不可寻址），为指针类型生成 `Ptr<T>` 类及 New / Load / Store
+导出，在不可寻址且可挂方法的值类上生成 `ptr()`，在 struct 上生成 `addr()`；需要方法集（值类只挂
 值接收者方法，指针类挂全部方法），以及每个位置恰好接受的 Python 类。

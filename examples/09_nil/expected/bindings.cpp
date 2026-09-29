@@ -134,57 +134,115 @@ public:
 };
 
 // ---------------------------------------------------------------------------
-// *List, as a struct wrapper of 06. Pointer receivers accept a nil list; the
+// List and *List, as in 06. A List is a Go variable and never nil; *List is
+// PtrList, which may be nil. Both handles pin a *List, so fields and methods
+// are shared through a template. Pointer receivers accept a nil list; the
 // value receiver and field access panic on it, as in Go.
 
-class List : public Ref {
+class PtrList;
+
+template <class Base>
+class ListMembers : public Base {
+protected:
+    explicit ListMembers(uintptr_t id) : Base(id) {}
+
 public:
-    explicit List(uintptr_t id) : Ref(id) {}
-    List(List&&) noexcept = default;
-
-    static List create(py::handle value, py::handle next) {
-        const auto v = go_int(value);
-        const auto& tail = wrapper_arg<List>(next, "List");
-        return List(allocated(SBNewList(v, tail.handle())));
-    }
-
     intptr_t value() const {
-        return go_call([&](SBString* p) { return SBListGetValue(handle(), p); });
+        return go_call([&](SBString* p) { return SBListGetValue(this->handle(), p); });
     }
     void set_value(py::handle value) {
         const auto v = go_int(value);
-        go_call([&](SBString* p) { SBListSetValue(handle(), v, p); });
+        go_call([&](SBString* p) { SBListSetValue(this->handle(), v, p); });
     }
     // The pointer held in the field: may be nil, and shares the list.
-    List next() const {
-        return List(go_call([&](SBString* p) { return SBListGetNext(handle(), p); }));
-    }
-    void set_next(py::handle value) {
-        const auto& tail = wrapper_arg<List>(value, "List");
-        go_call([&](SBString* p) { SBListSetNext(handle(), tail.handle(), p); });
-    }
+    PtrList next() const;
+    void set_next(py::handle value);
 
     intptr_t len() const {
-        return go_call([&](SBString* p) { return SBListLen(handle(), p); });
+        return go_call([&](SBString* p) { return SBListLen(this->handle(), p); });
     }
-    List push(py::handle v) const {
-        const auto item = go_int(v);
-        return List(go_call([&](SBString* p) { return SBListPush(handle(), item, p); }));
-    }
+    PtrList push(py::handle v) const;
     intptr_t first() const {
-        return go_call([&](SBString* p) { return SBListFirst(handle(), p); });
+        return go_call([&](SBString* p) { return SBListFirst(this->handle(), p); });
     }
     intptr_t head() const {
-        return go_call([&](SBString* p) { return SBListHead(handle(), p); });
+        return go_call([&](SBString* p) { return SBListHead(this->handle(), p); });
     }
 };
+
+class List : public ListMembers<Ref> {
+public:
+    explicit List(uintptr_t id) : ListMembers(allocated(id)) {}
+    List(List&&) noexcept = default;
+
+    static List create(py::handle value, py::handle next);
+    PtrList addr() const;
+};
+
+class PtrList : public ListMembers<Ref> {
+public:
+    explicit PtrList(uintptr_t id) : ListMembers(id) {}
+    PtrList(PtrList&&) noexcept = default;
+
+    // Go's p := new(List); *p = v.
+    static PtrList from_value(const List& value) {
+        return PtrList(allocated(SBListCopy(value.handle())));
+    }
+    // Go's *p, a view of the variable; GoPanic on nil.
+    List target() const {
+        return List(go_call([&](SBString* p) { return SBPtrListLoad(handle(), p); }));
+    }
+    void set_target(py::handle value) {
+        const auto& source = wrapper_arg<List>(value, "List");
+        go_call([&](SBString* p) { SBPtrListStore(handle(), source.handle(), p); });
+    }
+};
+
+template <class Base>
+PtrList ListMembers<Base>::next() const {
+    return PtrList(go_call([&](SBString* p) { return SBListGetNext(this->handle(), p); }));
+}
+
+template <class Base>
+void ListMembers<Base>::set_next(py::handle value) {
+    const auto& tail = wrapper_arg<PtrList>(value, "PtrList");
+    go_call([&](SBString* p) { SBListSetNext(this->handle(), tail.handle(), p); });
+}
+
+template <class Base>
+PtrList ListMembers<Base>::push(py::handle v) const {
+    const auto item = go_int(v);
+    return PtrList(go_call([&](SBString* p) { return SBListPush(this->handle(), item, p); }));
+}
+
+List List::create(py::handle value, py::handle next) {
+    const auto v = go_int(value);
+    const auto& tail = wrapper_arg<PtrList>(next, "PtrList");
+    return List(SBNewList(v, tail.handle()));
+}
+
+// Go's &v.
+PtrList List::addr() const { return PtrList(allocated(SBListAddr(handle()))); }
+
+template <class Class>
+Class& def_list_members(Class& cls) {
+    using T = typename Class::type;
+    // Go field Value: "value" is PtrList's *p, so the field gets a trailing
+    // underscore on both classes.
+    return cls.def_property("value_", &T::value, &T::set_value)
+        .def_property("next", &T::next, &T::set_next)
+        .def("len", &T::len)
+        .def("push", &T::push, py::arg("v"))
+        .def("first", &T::first)
+        .def("head", &T::head);
+}
 
 // ---------------------------------------------------------------------------
 // Functions.
 
-List find(const List& l, py::handle v) {
+PtrList find(const PtrList& l, py::handle v) {
     const auto item = go_int(v);
-    return List(go_call([&](SBString* p) { return SBFind(l.handle(), item, p); }));
+    return PtrList(go_call([&](SBString* p) { return SBFind(l.handle(), item, p); }));
 }
 
 py::str deref(const PtrInt& p) {
@@ -216,17 +274,19 @@ PYBIND11_MODULE(_native, module) {
         .def_property("value", &PtrInt::value, &PtrInt::set_value);
     define_nil(ptr_int);
 
-    py::class_<List, Ref> list(module, "List");
-    define_nil(list);
     // The default next is a nil *List, i.e. the field's zero value.
-    list.def(py::init(&List::create), py::kw_only(), py::arg("value") = 0,
-             py::arg("next") = py::cast(List(0)))
-        .def_property("value", &List::value, &List::set_value)
-        .def_property("next", &List::next, &List::set_next)
-        .def("len", &List::len)
-        .def("push", &List::push, py::arg("v"))
-        .def("first", &List::first)
-        .def("head", &List::head);
+    py::class_<PtrList, Ref> ptr_list(module, "PtrList");
+    define_nil(ptr_list);
+    py::class_<List, Ref> list(module, "List");
+    list.def(py::init(&List::create), py::kw_only(), py::arg("value_") = 0,
+             py::arg("next") = py::cast(PtrList(0)))
+        .def("addr", &List::addr);
+    def_list_members(list);
+    ptr_list
+        .def(py::init(&PtrList::from_value), py::arg("value").noconvert().none(false))
+        .def_static("from_value", &PtrList::from_value, py::arg("value").noconvert().none(false))
+        .def_property("value", &PtrList::target, &PtrList::set_target);
+    def_list_members(ptr_list);
 
     module.def("find", &find, py::arg("l").noconvert().none(false), py::arg("v"));
     module.def("deref", &deref, py::arg("p").noconvert().none(false));

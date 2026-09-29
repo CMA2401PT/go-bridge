@@ -188,23 +188,76 @@ py::object define_counter(py::module_& module) {
 }
 
 // ---------------------------------------------------------------------------
-// Structs, as in 06: each wrapper holds a *T.
+// Structs and their pointers, as in 06: T is a Go variable and *T is PtrT.
+// Both handles pin a *T; fields and methods are shared through a template.
 
-class Inner : public Ref {
+// Inner and *Inner.
+
+template <class Base>
+class InnerMembers : public Base {
+protected:
+    explicit InnerMembers(uintptr_t id) : Base(id) {}
+
 public:
-    explicit Inner(uintptr_t id) : Ref(id) {}
+    intptr_t n() const { return SBInnerGetN(this->handle()); }
+    void set_n(py::handle value) { SBInnerSetN(this->handle(), go_int(value)); }
+};
+
+class PtrInner;
+
+class Inner : public InnerMembers<Ref> {
+public:
+    explicit Inner(uintptr_t id) : InnerMembers(id) {}
     Inner(Inner&&) noexcept = default;
 
     static Inner create(py::handle n) { return Inner(SBNewInner(go_int(n))); }
-    intptr_t n() const { return SBInnerGetN(handle()); }
-    void set_n(py::handle value) { SBInnerSetN(handle(), go_int(value)); }
+    PtrInner addr() const;
 };
 
+class PtrInner : public InnerMembers<Ptr> {
+public:
+    explicit PtrInner(uintptr_t id) : InnerMembers(id) {}
+    PtrInner(PtrInner&&) noexcept = default;
+
+    static PtrInner from_value(const Inner& value) { return PtrInner(SBInnerCopy(value.handle())); }
+    Inner value() const { return Inner(SBInnerAlias(handle())); }
+    void set_value(py::handle value) {
+        SBInnerStore(handle(), wrapper_arg<Inner>(value, "Inner").handle());
+    }
+};
+
+PtrInner Inner::addr() const { return PtrInner(SBInnerAlias(handle())); }
+
+template <class Class>
+Class& def_inner_members(Class& cls) {
+    using T = typename Class::type;
+    return cls.def_property("n", &T::n, &T::set_n);
+}
+
+// Box and *Box.
+
+template <class Base>
+class BoxMembers : public Base {
+protected:
+    explicit BoxMembers(uintptr_t id) : Base(id) {}
+
+public:
+    py::object count() const { return counter(SBBoxGetCount(this->handle())); }
+    void set_count(py::handle value) { SBBoxSetCount(this->handle(), counter_value(value)); }
+    Inner inner() const { return Inner(SBBoxGetInner(this->handle())); }
+    void set_inner(py::handle value) {
+        SBBoxSetInner(this->handle(), wrapper_arg<Inner>(value, "Inner").handle());
+    }
+    py::str echo() const { return py_string(SBBoxEcho(this->handle())); }
+    void inc() { SBBoxInc(this->handle()); }
+};
+
+class PtrBox;
 class PtrPtrBox;
 
-class Box : public Ref {
+class Box : public BoxMembers<Ref> {
 public:
-    explicit Box(uintptr_t id) : Ref(id) {}
+    explicit Box(uintptr_t id) : BoxMembers(id) {}
     Box(Box&&) noexcept = default;
 
     static Box create(py::handle count, py::handle inner) {
@@ -213,36 +266,52 @@ public:
             inner.is_none() ? 0 : wrapper_arg<Inner>(inner, "Inner").handle();
         return Box(SBNewBox(count_value, inner_handle));
     }
+    PtrBox addr() const;
+};
 
-    py::object count() const { return counter(SBBoxGetCount(handle())); }
-    void set_count(py::handle value) { SBBoxSetCount(handle(), counter_value(value)); }
-    Inner inner() const { return Inner(SBBoxGetInner(handle())); }
-    void set_inner(py::handle value) {
-        SBBoxSetInner(handle(), wrapper_arg<Inner>(value, "Inner").handle());
+// *Box: generated for every named struct; **Box also needs it as its target.
+class PtrBox : public BoxMembers<Ptr> {
+public:
+    explicit PtrBox(uintptr_t id) : BoxMembers(id) {}
+    PtrBox(PtrBox&&) noexcept = default;
+
+    static PtrBox from_value(const Box& value) { return PtrBox(SBBoxCopy(value.handle())); }
+    Box value() const { return Box(SBBoxAlias(handle())); }
+    void set_value(py::handle value) {
+        SBBoxStore(handle(), wrapper_arg<Box>(value, "Box").handle());
     }
-    py::str echo() const { return py_string(SBBoxEcho(handle())); }
-    void inc() { SBBoxInc(handle()); }
     PtrPtrBox ptr() const;
 };
 
-// **Box. Box already stands for *Box, so the target is a Box wrapper and
-// storing one copies the pointer, not the struct.
+PtrBox Box::addr() const { return PtrBox(SBBoxAlias(handle())); }
+
+template <class Class>
+Class& def_box_members(Class& cls) {
+    using T = typename Class::type;
+    return cls.def_property("count", &T::count, &T::set_count)
+        .def_property("inner", &T::inner, &T::set_inner)
+        .def("echo", &T::echo)
+        .def("inc", &T::inc);
+}
+
+// **Box, a pointer to a pointer as for **int: storing a PtrBox copies the
+// pointer, not the struct.
 class PtrPtrBox : public Ptr {
 public:
     explicit PtrPtrBox(uintptr_t id) : Ptr(id) {}
     PtrPtrBox(PtrPtrBox&&) noexcept = default;
 
     static PtrPtrBox from_value(py::handle value) {
-        return PtrPtrBox(SBNewPtrPtrBox(wrapper_arg<Box>(value, "Box").handle()));
+        return PtrPtrBox(SBNewPtrPtrBox(wrapper_arg<PtrBox>(value, "PtrBox").handle()));
     }
 
-    Box value() const { return pointer_target<Box>(SBPtrPtrBoxLoad(handle())); }
+    PtrBox value() const { return pointer_target<PtrBox>(SBPtrPtrBoxLoad(handle())); }
     void set_value(py::handle value) {
-        SBPtrPtrBoxStore(handle(), wrapper_arg<Box>(value, "Box").handle());
+        SBPtrPtrBoxStore(handle(), wrapper_arg<PtrBox>(value, "PtrBox").handle());
     }
 };
 
-PtrPtrBox Box::ptr() const { return PtrPtrBox(SBNewPtrPtrBox(handle())); }
+PtrPtrBox PtrBox::ptr() const { return PtrPtrBox(SBNewPtrPtrBox(handle())); }
 
 // ---------------------------------------------------------------------------
 // Functions.
@@ -282,17 +351,27 @@ PYBIND11_MODULE(_native, module) {
         .def("unname", &IntPtr::unname)
         .def_property("value", &IntPtr::value, &IntPtr::set_value);
 
-    py::class_<Inner, Ref>(module, "Inner")
-        .def(py::init(&Inner::create), py::kw_only(), py::arg("n") = 0)
-        .def_property("n", &Inner::n, &Inner::set_n);
-    py::class_<Box, Ref>(module, "Box")
-        .def(py::init(&Box::create), py::kw_only(), py::arg("count") = counter_class(0),
-             py::arg("inner") = py::none())
-        .def_property("count", &Box::count, &Box::set_count)
-        .def_property("inner", &Box::inner, &Box::set_inner)
-        .def("echo", &Box::echo)
-        .def("inc", &Box::inc)
-        .def("ptr", &Box::ptr);
+    py::class_<Inner, Ref> inner(module, "Inner");
+    inner.def(py::init(&Inner::create), py::kw_only(), py::arg("n") = 0)
+        .def("addr", &Inner::addr);
+    def_inner_members(inner);
+    py::class_<PtrInner, Ptr> ptr_inner(module, "PtrInner");
+    ptr_inner.def(py::init(&PtrInner::from_value), py::arg("value").noconvert().none(false))
+        .def_static("from_value", &PtrInner::from_value, py::arg("value").noconvert().none(false))
+        .def_property("value", &PtrInner::value, &PtrInner::set_value);
+    def_inner_members(ptr_inner);
+
+    py::class_<Box, Ref> box(module, "Box");
+    box.def(py::init(&Box::create), py::kw_only(), py::arg("count") = counter_class(0),
+            py::arg("inner") = py::none())
+        .def("addr", &Box::addr);
+    def_box_members(box);
+    py::class_<PtrBox, Ptr> ptr_box(module, "PtrBox");
+    ptr_box.def(py::init(&PtrBox::from_value), py::arg("value").noconvert().none(false))
+        .def_static("from_value", &PtrBox::from_value, py::arg("value").noconvert().none(false))
+        .def_property("value", &PtrBox::value, &PtrBox::set_value)
+        .def("ptr", &PtrBox::ptr);
+    def_box_members(ptr_box);
     py::class_<PtrPtrBox, Ptr>(module, "PtrPtrBox")
         .def(py::init(&PtrPtrBox::from_value), py::arg("value"))
         .def_static("from_value", &PtrPtrBox::from_value, py::arg("value"))

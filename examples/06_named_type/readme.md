@@ -4,7 +4,8 @@
 
 - `type MyNamedNonStructInt int`：底层是值类型，按值跨 ABI。
 - `type MyNamedNonStructSliceInt []int`：底层是 Go 管理的 slice，按句柄跨 ABI。
-- `struct`：含标量、slice、命名类型、嵌套 struct 与嵌入字段，按句柄跨 ABI。
+- `struct`：含标量、slice、命名类型、嵌套 struct 与嵌入字段，按句柄跨 ABI；
+  以及它的指针类型 `*MyNamedStruct`。
 
 Ref、Pin / Get / UnPin 沿用 [04](../04_bytes_and_holder/readme.md)，slice 沿用
 [05](../05_slice/readme.md)，string 返回值沿用 [03](../03_str/readme.md)。本文只记录新增规则。
@@ -36,7 +37,10 @@ v.named_ref_member_value.basic_member_value = 60   # Go 的 v.F.X = 60
 v.basic_member_value_2 = 2              # 嵌入字段的提升字段
 v.inc_basic_ptr()                       # 指针接收者：修改 v
 w = v.inc_basic_non_ptr()               # 值接收者：修改副本并返回
-c = copy.copy(v)                        # Go 的 c := *p，浅拷贝
+c = copy.copy(v)                        # Go 的 c := v，浅拷贝
+p = v.addr()                            # Go 的 p := &v，PtrMyNamedStruct
+bridge.ptr_fn_echo_ptr(p)               # 传 v 本身会被拒绝
+q = bridge.PtrMyNamedStruct(v)          # Go 的 q := new(T); *q = v，复制
 ```
 
 总原则：**命名类型的 ABI 表示只由底层类型决定，名字只存在于 Python 类和 Go
@@ -95,7 +99,8 @@ Go int 参数使用同样的范围和类型检查，默认值 0 是 Go 零值；
 
 ## struct：句柄持有 `*T`
 
-struct 包装对象继承 Ref，Go 侧 **Pin 的是 `*T` 而不是 `T`**：
+struct 包装对象继承 Ref，是一个类型为 `T` 的 Go 变量。Go 侧 **Pin 的是 `*T` 而不是
+`T`**：
 
 - 字段视图和指针接收者都需要稳定地址。视图是 `Pin(&s.Field)`，嵌入字段位于
   偏移 0，与父 struct 地址相同；若直接以内部地址为句柄，会与父对象的 holders
@@ -142,23 +147,46 @@ slice 参数**共享**底层数组。
 | --- | --- | --- |
 | 值接收者 `func (s T) M()` | `(*p).M()`，接收者是副本 | 修改不影响原对象 |
 | 指针接收者 `func (s *T) M()` | `p.M()` | 修改对所有别名与视图可见 |
-| 参数 `T` | `*p` 复制后传入 | 同一个包装类 |
-| 参数 `*T` | 直接传 `p` | 同一个包装类，`None` 被拒绝 |
-| `v := *p` | `SB<T>Copy` | `copy.copy(v)`，浅拷贝，slice 字段仍共享数组 |
+| 参数 `T` | `*p` 复制后传入 | 只接受 `T` |
+| 参数 `*T` | 直接传 `p` | 只接受 `PtrT`，见下节 |
+| `c := v` | `SB<T>Copy` | `copy.copy(v)`，浅拷贝，slice 字段仍共享数组 |
 
 `G.go` 为此增加了 `IncBasicPtr` 与 `IncBasicNonPtr`，因为原有的 echo 方法不修改
 接收者，无法区分两种语义。值接收者返回的 `MyNamedStruct` 被 Pin 为新的 `*T`。
 
-Python 变量赋值只产生别名，对应 Go 中复制指针，而不是复制 struct。没有提供
+Python 变量赋值只产生别名，两个名字指向同一个 Go 变量，而不是复制 struct。没有提供
 `__deepcopy__`、`__eq__` 或 `__repr__`：Go 没有通用深拷贝，struct 的 `==` 与
 `%v` 语义留给后续案例。
+
+## struct 的指针类
+
+`*T` 由独立的 `PtrT(Ptr[T])` 表示，每个命名 struct 都会生成（类型闭包，见
+[`../types.md`](../types.md)）。它和 `T` 的句柄都是 Pin 的 `*T`，所以共用字段与方法
+导出，只是 Python 类型不同：
+
+| Go | ABI | Python |
+| --- | --- | --- |
+| `p := &v` | `SB<T>Alias`，新句柄，同一个 `*T` | `v.addr() -> PtrT`，共享 |
+| `p := new(T); *p = v` | `SB<T>Copy` | `PtrT(v)`、`PtrT.from_value(v)`，复制 |
+| `*p`（可寻址） | `SB<T>Alias` | `p.value -> T`，视图，与读 struct 字段相同 |
+| `*p = v` | `SB<T>Store` | `p.value = v`，复制 |
+| `p.F`、`p.M()` | 与 `T` 相同 | `PtrT` 有 `T` 的全部字段与方法 |
+
+- 为什么分开：Go 中 `T` 与 `*T` 是不同类型，赋给 `any`、type switch、实现接口时都
+  不一样（10）。合并成一个类就无法表达“这个 `any` 装的是 `T` 还是 `*T`”。
+- `T` 与 `PtrT` 互不接受：`*T` 参数写 `f(v.addr())`，`T` 参数写 `f(p.value)`，与 Go
+  的 `F(&v)`、`F(*p)` 一样显式。字段与构造参数同样严格。
+- 取地址叫 `addr()` 而不是 `ptr()`：07 的 `ptr()` 对**副本**取地址，而 struct 包装
+  本身是变量，`addr()` 共享它。同名但语义相反容易误用。
+- `PtrT` 没有 `addr()`、`__copy__`：它是指针值，复制指针就是 Python 赋值。
+- 06 的 `PtrT` 永远非 nil；nil 见 [09](../09_nil/readme.md)。
 
 ## 所有权与边界
 
 - 命名值类型只按值复制；其余包装对象析构时只调用通用 `SBUnPin`。
 - struct 视图、slice 字段读取与值接收者结果都是新的 Pin，遵守“一个 Pin 对应
   一个 Ref”；Go 值中从不保存句柄，不存在跨边界引用环。
-- `*T` 参数永远非 nil；nil 指针的返回和参数、指针字段留给指针与可空值案例。
+- 本例的 `PtrT` 永远非 nil；nil 指针的返回和参数、指针字段见 09。
 - 共享数据的并发读写与 05 相同，由 Go 对象自身负责同步；绑定始终持有 GIL。
 
 ## 验证
@@ -167,8 +195,10 @@ Python 测试覆盖：命名 int 的 int 行为、极值、类型拒绝和方法
 SliceInt 互不继承、双向转换共享数组、名字保持、参数与字段拒绝未转换的 slice；struct 的零值
 构造、复制与共享规则、标量/命名/slice/struct 字段读写、嵌入与提升字段、视图在
 父对象释放后存活、别名、浅拷贝、两种接收者、Go int 回绕、参数拒绝和构造失败
-不泄漏句柄。每个 Ref 测试结束时检查 holder 数量回到基线。Go 测试覆盖命名
-slice 布局共享、零值字段、偏移 0 的视图、父对象释放后的视图以及接收者和浅拷贝。
+不泄漏句柄；struct 指针类的 `addr()` 共享、构造复制、`.value` 视图与写入复制、
+经指针调用两种接收者，以及 `T` 与 `PtrT` 互不接受。每个 Ref 测试结束时检查 holder
+数量回到基线。Go 测试覆盖命名 slice 布局共享、零值字段、偏移 0 的视图、父对象
+释放后的视图、接收者和浅拷贝，以及 Alias / Copy / Store 的共享与复制。
 
 ```sh
 GOEXPERIMENT=cgocheck2 python examples/build.py 06_named_type --test
@@ -180,7 +210,7 @@ MYPYPATH=examples/.build/06_named_type/python mypy examples/06_named_type/test.p
 
 生成器需要从 `go/types` 获得每个命名类型的底层类型，并据此选择：底层为标量
 时生成 Python 内建类型的子类并按值传递；底层为 slice 时生成对应 `Slice[Elem]`
-类的子类并复用其导出；struct 生成持有 `*T` 的 Ref 子类。还需要知道方法集及
+类的子类并复用其导出；struct 生成持有 `*T` 的 Ref 子类和共用导出的 `PtrT`。还需要知道方法集及
 每个方法的接收者是值还是指针、struct 字段顺序、导出性与嵌入关系（用于提升
 字段，以及同名字段的遮蔽规则），参数只接受恰好对应的 Python 类，
 命名类型与底层类型之间生成显式转换。未覆盖：其他底层类型（string、bool、float、map）、提升方法、嵌入指针、

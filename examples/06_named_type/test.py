@@ -263,12 +263,17 @@ class StructTests(Holders):
         value = full_struct()
         expected = echo("{{2} 1 [3 4] 5 {6}}")
         self.assertEqual(bridge.fn_echo_non_ptr(value), expected)
-        self.assertEqual(bridge.ptr_fn_echo_ptr(value), expected)
+        self.assertEqual(bridge.ptr_fn_echo_ptr(value.addr()), expected)
         for bad in [None, bridge.MyNamedSubStruct(), {"basic_member_value": 1}]:
             with self.assertRaises(TypeError):
                 bridge.fn_echo_non_ptr(bad)  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
                 bridge.ptr_fn_echo_ptr(bad)  # type: ignore[arg-type]
+        # T and *T are distinct types: no implicit &v or *p.
+        with self.assertRaises(TypeError):
+            bridge.ptr_fn_echo_ptr(value)  # type: ignore[arg-type]
+        with self.assertRaises(TypeError):
+            bridge.fn_echo_non_ptr(value.addr())  # type: ignore[arg-type]
 
     def test_rejected_constructor_arguments(self) -> None:
         with self.assertRaises(TypeError):
@@ -289,6 +294,7 @@ class StructTests(Holders):
         value = bridge.MyNamedStruct()
         for cls in [bridge.MyNamedStruct, bridge.MyNamedSubStruct, bridge.MyNamedAnomySubStruct]:
             self.assertTrue(issubclass(cls, bridge.Ref))
+            self.assertFalse(issubclass(cls, bridge.Ptr))
         with self.assertRaises(TypeError):
             bridge.Ref()  # type: ignore[call-arg]
         for name in ["handle", "close", "__enter__", "__dict__"]:
@@ -297,9 +303,78 @@ class StructTests(Holders):
             value.extra = 1  # type: ignore[attr-defined]
 
 
+class StructPtrTests(Holders):
+    def test_addr_shares_the_variable(self) -> None:
+        value = full_struct()
+        p = value.addr()  # Go's p := &v
+        self.assertIs(type(p), bridge.PtrMyNamedStruct)
+        self.assertIsInstance(p, bridge.Ptr)
+        self.assertNotIsInstance(p, bridge.MyNamedStruct)
+        p.basic_member_value = 10  # Go's p.X = 10
+        self.assertEqual(value.basic_member_value, 10)
+        p.inc_basic_ptr()
+        self.assertEqual(value.basic_member_value, 11)
+        value.named_ref_member_value.basic_member_value = 60
+        self.assertEqual(p.named_ref_member_value.basic_member_value, 60)
+        self.assertEqual(p.echo_non_ptr(), value.echo_ptr())
+        # Each addr() is a new Ref to the same variable.
+        self.assertIsNot(value.addr(), p)
+        del value
+        _native._collect_go()
+        self.assertEqual(p.basic_member_value, 11)
+
+    def test_from_value_copies(self) -> None:
+        value = bridge.MyNamedStruct(basic_member_value=1)
+        for p in [bridge.PtrMyNamedStruct(value), bridge.PtrMyNamedStruct.from_value(value)]:
+            p.basic_member_value = 2  # Go's p := new(T); *p = v
+            self.assertEqual(value.basic_member_value, 1)
+        sub = bridge.PtrMyNamedSubStruct(bridge.MyNamedSubStruct(basic_member_value=3))
+        self.assertEqual(sub.basic_member_value, 3)
+        anomy = bridge.PtrMyNamedAnomySubStruct.from_value(bridge.MyNamedAnomySubStruct())
+        self.assertEqual(anomy.basic_member_value_2, 0)
+
+    def test_value_is_the_variable(self) -> None:
+        value = full_struct()
+        p = value.addr()
+        target = p.value  # Go's *p is addressable: a view, not a copy.
+        self.assertIs(type(target), bridge.MyNamedStruct)
+        target.basic_member_value = 7
+        self.assertEqual(value.basic_member_value, 7)
+        p.value = bridge.MyNamedStruct(basic_member_value=8)  # Go's *p = v copies in.
+        self.assertEqual(value.basic_member_value, 8)
+        self.assertEqual(target.basic_member_value, 8)
+        self.assertEqual(value.echo_ptr(), echo("{{0} 8 [] 0 {0}}"))
+
+    def test_value_receiver_through_pointer(self) -> None:
+        p = full_struct().addr()
+        result = p.inc_basic_non_ptr()  # (*p).M(): a copy.
+        self.assertIs(type(result), bridge.MyNamedStruct)
+        self.assertEqual((p.basic_member_value, result.basic_member_value), (1, 2))
+
+    def test_strict(self) -> None:
+        value = full_struct()
+        p = value.addr()
+        sub = bridge.MyNamedSubStruct()
+        for bad in [None, p, sub, sub.addr()]:
+            with self.assertRaises(TypeError):
+                bridge.PtrMyNamedStruct(bad)  # type: ignore[arg-type]
+            with self.assertRaises(TypeError):
+                p.value = bad  # type: ignore[assignment]
+        with self.assertRaises(TypeError):
+            bridge.PtrMyNamedStruct()  # type: ignore[call-arg]
+        # Fields keep their own types: a pointer is not a struct value.
+        with self.assertRaises(TypeError):
+            value.named_ref_member_value = sub.addr()  # type: ignore[assignment]
+        with self.assertRaises(TypeError):
+            bridge.MyNamedStruct(named_ref_member_value=sub.addr())  # type: ignore[arg-type]
+        for name in ["addr", "__copy__"]:
+            self.assertFalse(hasattr(p, name))
+        self.assertFalse(hasattr(value, "value"))
+
+
 if __name__ == "__main__":
     suite = unittest.TestSuite()
-    for case in [NamedIntTests, NamedSliceTests, StructTests]:
+    for case in [NamedIntTests, NamedSliceTests, StructTests, StructPtrTests]:
         suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(case))
     result = unittest.TextTestRunner().run(suite)
     if not result.wasSuccessful():

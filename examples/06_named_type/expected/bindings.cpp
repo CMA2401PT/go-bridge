@@ -212,55 +212,210 @@ public:
 };
 
 // ---------------------------------------------------------------------------
-// Structs. Each wrapper holds a handle to a Go *T. A struct-typed field is
-// read as a view of the parent's field (Go's &s.Field) and written by copying
-// the value in (Go's s.Field = v). Omitted constructor fields are 0 handles
-// and keep the Go zero value.
+// Structs. A struct wrapper T is a Go variable of type T: its handle pins the
+// variable's address, a *T. A struct-typed field is read as a view of the
+// parent's field (Go's &s.Field) and written by copying the value in (Go's
+// s.Field = v). Omitted constructor fields are 0 handles and keep the Go
+// zero value.
+//
+// *T is a separate class, PtrT, whose handle is also a pinned *T. Fields and
+// methods are written once as a template over the wrapper base, instantiated
+// on Ref for T and on Ptr for PtrT; only the Python types differ.
+
+class Ptr : public Ref {
+protected:
+    using Ref::Ref;
+};
 
 template <class T>
 uintptr_t optional_handle(py::handle value, const char* expected) {
     return value.is_none() ? 0 : wrapper_arg<T>(value, expected).handle();
 }
 
-class MyNamedSubStruct : public Ref {
+// MyNamedSubStruct and *MyNamedSubStruct.
+
+template <class Base>
+class MyNamedSubStructMembers : public Base {
+protected:
+    explicit MyNamedSubStructMembers(uintptr_t id) : Base(id) {}
+
 public:
-    explicit MyNamedSubStruct(uintptr_t id) : Ref(id) {}
+    intptr_t basic_member_value() const {
+        return SBMyNamedSubStructGetBasicMemberValue(this->handle());
+    }
+    void set_basic_member_value(py::handle value) {
+        SBMyNamedSubStructSetBasicMemberValue(this->handle(), go_int(value));
+    }
+};
+
+class PtrMyNamedSubStruct;
+
+class MyNamedSubStruct : public MyNamedSubStructMembers<Ref> {
+public:
+    explicit MyNamedSubStruct(uintptr_t id) : MyNamedSubStructMembers(id) {}
     MyNamedSubStruct(MyNamedSubStruct&&) noexcept = default;
 
     static MyNamedSubStruct create(py::handle basic_member_value) {
         return MyNamedSubStruct(SBNewMyNamedSubStruct(go_int(basic_member_value)));
     }
-
-    intptr_t basic_member_value() const { return SBMyNamedSubStructGetBasicMemberValue(handle()); }
-    void set_basic_member_value(py::handle value) {
-        SBMyNamedSubStructSetBasicMemberValue(handle(), go_int(value));
-    }
     MyNamedSubStruct copy() const { return MyNamedSubStruct(SBMyNamedSubStructCopy(handle())); }
+    PtrMyNamedSubStruct addr() const;
 };
 
-class MyNamedAnomySubStruct : public Ref {
+class PtrMyNamedSubStruct : public MyNamedSubStructMembers<Ptr> {
 public:
-    explicit MyNamedAnomySubStruct(uintptr_t id) : Ref(id) {}
+    explicit PtrMyNamedSubStruct(uintptr_t id) : MyNamedSubStructMembers(id) {}
+    PtrMyNamedSubStruct(PtrMyNamedSubStruct&&) noexcept = default;
+
+    // Go's p := new(T); *p = v: a new variable holding a copy.
+    static PtrMyNamedSubStruct from_value(const MyNamedSubStruct& value) {
+        return PtrMyNamedSubStruct(SBMyNamedSubStructCopy(value.handle()));
+    }
+    // *p is a variable, so reading it is a view, like a struct field.
+    MyNamedSubStruct value() const { return MyNamedSubStruct(SBMyNamedSubStructAlias(handle())); }
+    void set_value(py::handle value) {
+        const auto& source = wrapper_arg<MyNamedSubStruct>(value, "MyNamedSubStruct");
+        SBMyNamedSubStructStore(handle(), source.handle());
+    }
+};
+
+// Go's &v: shares the variable.
+PtrMyNamedSubStruct MyNamedSubStruct::addr() const {
+    return PtrMyNamedSubStruct(SBMyNamedSubStructAlias(handle()));
+}
+
+template <class Class>
+Class& def_my_named_sub_struct_members(Class& cls) {
+    using T = typename Class::type;
+    return cls.def_property("basic_member_value", &T::basic_member_value,
+                            &T::set_basic_member_value);
+}
+
+// MyNamedAnomySubStruct and *MyNamedAnomySubStruct.
+
+template <class Base>
+class MyNamedAnomySubStructMembers : public Base {
+protected:
+    explicit MyNamedAnomySubStructMembers(uintptr_t id) : Base(id) {}
+
+public:
+    intptr_t basic_member_value_2() const {
+        return SBMyNamedAnomySubStructGetBasicMemberValue2(this->handle());
+    }
+    void set_basic_member_value_2(py::handle value) {
+        SBMyNamedAnomySubStructSetBasicMemberValue2(this->handle(), go_int(value));
+    }
+};
+
+class PtrMyNamedAnomySubStruct;
+
+class MyNamedAnomySubStruct : public MyNamedAnomySubStructMembers<Ref> {
+public:
+    explicit MyNamedAnomySubStruct(uintptr_t id) : MyNamedAnomySubStructMembers(id) {}
     MyNamedAnomySubStruct(MyNamedAnomySubStruct&&) noexcept = default;
 
     static MyNamedAnomySubStruct create(py::handle basic_member_value_2) {
         return MyNamedAnomySubStruct(SBNewMyNamedAnomySubStruct(go_int(basic_member_value_2)));
     }
-
-    intptr_t basic_member_value_2() const {
-        return SBMyNamedAnomySubStructGetBasicMemberValue2(handle());
-    }
-    void set_basic_member_value_2(py::handle value) {
-        SBMyNamedAnomySubStructSetBasicMemberValue2(handle(), go_int(value));
-    }
     MyNamedAnomySubStruct copy() const {
         return MyNamedAnomySubStruct(SBMyNamedAnomySubStructCopy(handle()));
     }
+    PtrMyNamedAnomySubStruct addr() const;
 };
 
-class MyNamedStruct : public Ref {
+class PtrMyNamedAnomySubStruct : public MyNamedAnomySubStructMembers<Ptr> {
 public:
-    explicit MyNamedStruct(uintptr_t id) : Ref(id) {}
+    explicit PtrMyNamedAnomySubStruct(uintptr_t id) : MyNamedAnomySubStructMembers(id) {}
+    PtrMyNamedAnomySubStruct(PtrMyNamedAnomySubStruct&&) noexcept = default;
+
+    static PtrMyNamedAnomySubStruct from_value(const MyNamedAnomySubStruct& value) {
+        return PtrMyNamedAnomySubStruct(SBMyNamedAnomySubStructCopy(value.handle()));
+    }
+    MyNamedAnomySubStruct value() const {
+        return MyNamedAnomySubStruct(SBMyNamedAnomySubStructAlias(handle()));
+    }
+    void set_value(py::handle value) {
+        const auto& source = wrapper_arg<MyNamedAnomySubStruct>(value, "MyNamedAnomySubStruct");
+        SBMyNamedAnomySubStructStore(handle(), source.handle());
+    }
+};
+
+PtrMyNamedAnomySubStruct MyNamedAnomySubStruct::addr() const {
+    return PtrMyNamedAnomySubStruct(SBMyNamedAnomySubStructAlias(handle()));
+}
+
+template <class Class>
+Class& def_my_named_anomy_sub_struct_members(Class& cls) {
+    using T = typename Class::type;
+    return cls.def_property("basic_member_value_2", &T::basic_member_value_2,
+                            &T::set_basic_member_value_2);
+}
+
+// MyNamedStruct and *MyNamedStruct.
+
+class MyNamedStruct;
+
+template <class Base>
+class MyNamedStructMembers : public Base {
+protected:
+    explicit MyNamedStructMembers(uintptr_t id) : Base(id) {}
+
+public:
+    MyNamedAnomySubStruct my_named_anomy_sub_struct() const {
+        return MyNamedAnomySubStruct(SBMyNamedStructGetMyNamedAnomySubStruct(this->handle()));
+    }
+    void set_my_named_anomy_sub_struct(py::handle value) {
+        const auto& field = wrapper_arg<MyNamedAnomySubStruct>(value, "MyNamedAnomySubStruct");
+        SBMyNamedStructSetMyNamedAnomySubStruct(this->handle(), field.handle());
+    }
+    // Promoted from the embedded MyNamedAnomySubStruct.
+    intptr_t basic_member_value_2() const {
+        return SBMyNamedStructGetBasicMemberValue2(this->handle());
+    }
+    void set_basic_member_value_2(py::handle value) {
+        SBMyNamedStructSetBasicMemberValue2(this->handle(), go_int(value));
+    }
+    intptr_t basic_member_value() const {
+        return SBMyNamedStructGetBasicMemberValue(this->handle());
+    }
+    void set_basic_member_value(py::handle value) {
+        SBMyNamedStructSetBasicMemberValue(this->handle(), go_int(value));
+    }
+    // Slice fields share their backing array in both directions.
+    SliceInt ref_member_value() const {
+        return SliceInt(SBMyNamedStructGetRefMemberValue(this->handle()));
+    }
+    void set_ref_member_value(py::handle value) {
+        SBMyNamedStructSetRefMemberValue(this->handle(),
+                                         wrapper_arg<SliceInt>(value, "SliceInt").handle());
+    }
+    py::object named_basic_member_value() const {
+        return my_named_non_struct_int(SBMyNamedStructGetNamedBasicMemberValue(this->handle()));
+    }
+    void set_named_basic_member_value(py::handle value) {
+        SBMyNamedStructSetNamedBasicMemberValue(this->handle(),
+                                                my_named_non_struct_int_value(value));
+    }
+    MyNamedSubStruct named_ref_member_value() const {
+        return MyNamedSubStruct(SBMyNamedStructGetNamedRefMemberValue(this->handle()));
+    }
+    void set_named_ref_member_value(py::handle value) {
+        const auto& field = wrapper_arg<MyNamedSubStruct>(value, "MyNamedSubStruct");
+        SBMyNamedStructSetNamedRefMemberValue(this->handle(), field.handle());
+    }
+
+    // T is a variable, so like *T it has both value and pointer receivers.
+    py::str echo_non_ptr() const { return py_string(SBMyNamedStructEchoNonPtr(this->handle())); }
+    py::str echo_ptr() const { return py_string(SBMyNamedStructEchoPtr(this->handle())); }
+    void inc_basic_ptr() { SBMyNamedStructIncBasicPtr(this->handle()); }
+    MyNamedStruct inc_basic_non_ptr() const;
+};
+
+class PtrMyNamedStruct;
+
+class MyNamedStruct : public MyNamedStructMembers<Ref> {
+public:
+    explicit MyNamedStruct(uintptr_t id) : MyNamedStructMembers(id) {}
     MyNamedStruct(MyNamedStruct&&) noexcept = default;
 
     static MyNamedStruct create(py::handle my_named_anomy_sub_struct,
@@ -278,54 +433,52 @@ public:
             named_ref_member_value, "MyNamedSubStruct");
         return MyNamedStruct(SBNewMyNamedStruct(anomy, basic, ref, named_basic, named_ref));
     }
-
-    MyNamedAnomySubStruct my_named_anomy_sub_struct() const {
-        return MyNamedAnomySubStruct(SBMyNamedStructGetMyNamedAnomySubStruct(handle()));
-    }
-    void set_my_named_anomy_sub_struct(py::handle value) {
-        const auto& field = wrapper_arg<MyNamedAnomySubStruct>(value, "MyNamedAnomySubStruct");
-        SBMyNamedStructSetMyNamedAnomySubStruct(handle(), field.handle());
-    }
-    // Promoted from the embedded MyNamedAnomySubStruct.
-    intptr_t basic_member_value_2() const {
-        return SBMyNamedStructGetBasicMemberValue2(handle());
-    }
-    void set_basic_member_value_2(py::handle value) {
-        SBMyNamedStructSetBasicMemberValue2(handle(), go_int(value));
-    }
-    intptr_t basic_member_value() const { return SBMyNamedStructGetBasicMemberValue(handle()); }
-    void set_basic_member_value(py::handle value) {
-        SBMyNamedStructSetBasicMemberValue(handle(), go_int(value));
-    }
-    // Slice fields share their backing array in both directions.
-    SliceInt ref_member_value() const {
-        return SliceInt(SBMyNamedStructGetRefMemberValue(handle()));
-    }
-    void set_ref_member_value(py::handle value) {
-        SBMyNamedStructSetRefMemberValue(handle(), wrapper_arg<SliceInt>(value, "SliceInt").handle());
-    }
-    py::object named_basic_member_value() const {
-        return my_named_non_struct_int(SBMyNamedStructGetNamedBasicMemberValue(handle()));
-    }
-    void set_named_basic_member_value(py::handle value) {
-        SBMyNamedStructSetNamedBasicMemberValue(handle(), my_named_non_struct_int_value(value));
-    }
-    MyNamedSubStruct named_ref_member_value() const {
-        return MyNamedSubStruct(SBMyNamedStructGetNamedRefMemberValue(handle()));
-    }
-    void set_named_ref_member_value(py::handle value) {
-        const auto& field = wrapper_arg<MyNamedSubStruct>(value, "MyNamedSubStruct");
-        SBMyNamedStructSetNamedRefMemberValue(handle(), field.handle());
-    }
     MyNamedStruct copy() const { return MyNamedStruct(SBMyNamedStructCopy(handle())); }
+    PtrMyNamedStruct addr() const;
+};
 
-    py::str echo_non_ptr() const { return py_string(SBMyNamedStructEchoNonPtr(handle())); }
-    py::str echo_ptr() const { return py_string(SBMyNamedStructEchoPtr(handle())); }
-    void inc_basic_ptr() { SBMyNamedStructIncBasicPtr(handle()); }
-    MyNamedStruct inc_basic_non_ptr() const {
-        return MyNamedStruct(SBMyNamedStructIncBasicNonPtr(handle()));
+class PtrMyNamedStruct : public MyNamedStructMembers<Ptr> {
+public:
+    explicit PtrMyNamedStruct(uintptr_t id) : MyNamedStructMembers(id) {}
+    PtrMyNamedStruct(PtrMyNamedStruct&&) noexcept = default;
+
+    static PtrMyNamedStruct from_value(const MyNamedStruct& value) {
+        return PtrMyNamedStruct(SBMyNamedStructCopy(value.handle()));
+    }
+    MyNamedStruct value() const { return MyNamedStruct(SBMyNamedStructAlias(handle())); }
+    void set_value(py::handle value) {
+        SBMyNamedStructStore(handle(), wrapper_arg<MyNamedStruct>(value, "MyNamedStruct").handle());
     }
 };
+
+template <class Base>
+MyNamedStruct MyNamedStructMembers<Base>::inc_basic_non_ptr() const {
+    return MyNamedStruct(SBMyNamedStructIncBasicNonPtr(this->handle()));
+}
+
+PtrMyNamedStruct MyNamedStruct::addr() const {
+    return PtrMyNamedStruct(SBMyNamedStructAlias(handle()));
+}
+
+template <class Class>
+Class& def_my_named_struct_members(Class& cls) {
+    using T = typename Class::type;
+    return cls
+        .def_property("my_named_anomy_sub_struct", &T::my_named_anomy_sub_struct,
+                      &T::set_my_named_anomy_sub_struct)
+        .def_property("basic_member_value_2", &T::basic_member_value_2,
+                      &T::set_basic_member_value_2)
+        .def_property("basic_member_value", &T::basic_member_value, &T::set_basic_member_value)
+        .def_property("ref_member_value", &T::ref_member_value, &T::set_ref_member_value)
+        .def_property("named_basic_member_value", &T::named_basic_member_value,
+                      &T::set_named_basic_member_value)
+        .def_property("named_ref_member_value", &T::named_ref_member_value,
+                      &T::set_named_ref_member_value)
+        .def("echo_non_ptr", &T::echo_non_ptr)
+        .def("echo_ptr", &T::echo_ptr)
+        .def("inc_basic_ptr", &T::inc_basic_ptr)
+        .def("inc_basic_non_ptr", &T::inc_basic_non_ptr);
+}
 
 // ---------------------------------------------------------------------------
 // Functions.
@@ -343,7 +496,7 @@ py::str fn_echo_non_ptr(const MyNamedStruct& si) {
     return py_string(SBFnEchoNonPtr(si.handle()));
 }
 
-py::str ptr_fn_echo_ptr(const MyNamedStruct& si) {
+py::str ptr_fn_echo_ptr(const PtrMyNamedStruct& si) {
     return py_string(SBPtrFnEchoPtr(si.handle()));
 }
 
@@ -379,43 +532,55 @@ PYBIND11_MODULE(_native, module) {
         .def("echo_non_struct_slice_int", &MyNamedNonStructSliceInt::echo_non_struct_slice_int);
 
     // Constructors are keyword-only, like keyed Go composite literals; every
-    // field defaults to its Go zero value.
-    py::class_<MyNamedSubStruct, Ref>(module, "MyNamedSubStruct")
-        .def(py::init(&MyNamedSubStruct::create), py::kw_only(),
-             py::arg("basic_member_value") = 0)
-        .def_property("basic_member_value", &MyNamedSubStruct::basic_member_value,
-                      &MyNamedSubStruct::set_basic_member_value)
-        .def("__copy__", &MyNamedSubStruct::copy);
-    py::class_<MyNamedAnomySubStruct, Ref>(module, "MyNamedAnomySubStruct")
-        .def(py::init(&MyNamedAnomySubStruct::create), py::kw_only(),
-             py::arg("basic_member_value_2") = 0)
-        .def_property("basic_member_value_2", &MyNamedAnomySubStruct::basic_member_value_2,
-                      &MyNamedAnomySubStruct::set_basic_member_value_2)
-        .def("__copy__", &MyNamedAnomySubStruct::copy);
-    py::class_<MyNamedStruct, Ref>(module, "MyNamedStruct")
-        .def(py::init(&MyNamedStruct::create), py::kw_only(),
-             py::arg("my_named_anomy_sub_struct") = py::none(),
-             py::arg("basic_member_value") = 0,
-             py::arg("ref_member_value") = py::none(),
-             py::arg("named_basic_member_value") = named_int(0),
-             py::arg("named_ref_member_value") = py::none())
-        .def_property("my_named_anomy_sub_struct", &MyNamedStruct::my_named_anomy_sub_struct,
-                      &MyNamedStruct::set_my_named_anomy_sub_struct)
-        .def_property("basic_member_value_2", &MyNamedStruct::basic_member_value_2,
-                      &MyNamedStruct::set_basic_member_value_2)
-        .def_property("basic_member_value", &MyNamedStruct::basic_member_value,
-                      &MyNamedStruct::set_basic_member_value)
-        .def_property("ref_member_value", &MyNamedStruct::ref_member_value,
-                      &MyNamedStruct::set_ref_member_value)
-        .def_property("named_basic_member_value", &MyNamedStruct::named_basic_member_value,
-                      &MyNamedStruct::set_named_basic_member_value)
-        .def_property("named_ref_member_value", &MyNamedStruct::named_ref_member_value,
-                      &MyNamedStruct::set_named_ref_member_value)
+    // field defaults to its Go zero value. A pointer class is built from a
+    // value (a copy) or by addr() (shared), and has the fields and methods too.
+    py::class_<Ptr, Ref>(module, "Ptr");
+
+    py::class_<MyNamedSubStruct, Ref> sub(module, "MyNamedSubStruct");
+    sub.def(py::init(&MyNamedSubStruct::create), py::kw_only(),
+            py::arg("basic_member_value") = 0)
+        .def("__copy__", &MyNamedSubStruct::copy)
+        .def("addr", &MyNamedSubStruct::addr);
+    def_my_named_sub_struct_members(sub);
+    py::class_<PtrMyNamedSubStruct, Ptr> ptr_sub(module, "PtrMyNamedSubStruct");
+    ptr_sub.def(py::init(&PtrMyNamedSubStruct::from_value), py::arg("value").noconvert().none(false))
+        .def_static("from_value", &PtrMyNamedSubStruct::from_value,
+                    py::arg("value").noconvert().none(false))
+        .def_property("value", &PtrMyNamedSubStruct::value, &PtrMyNamedSubStruct::set_value);
+    def_my_named_sub_struct_members(ptr_sub);
+
+    py::class_<MyNamedAnomySubStruct, Ref> anomy(module, "MyNamedAnomySubStruct");
+    anomy.def(py::init(&MyNamedAnomySubStruct::create), py::kw_only(),
+              py::arg("basic_member_value_2") = 0)
+        .def("__copy__", &MyNamedAnomySubStruct::copy)
+        .def("addr", &MyNamedAnomySubStruct::addr);
+    def_my_named_anomy_sub_struct_members(anomy);
+    py::class_<PtrMyNamedAnomySubStruct, Ptr> ptr_anomy(module, "PtrMyNamedAnomySubStruct");
+    ptr_anomy
+        .def(py::init(&PtrMyNamedAnomySubStruct::from_value),
+             py::arg("value").noconvert().none(false))
+        .def_static("from_value", &PtrMyNamedAnomySubStruct::from_value,
+                    py::arg("value").noconvert().none(false))
+        .def_property("value", &PtrMyNamedAnomySubStruct::value,
+                      &PtrMyNamedAnomySubStruct::set_value);
+    def_my_named_anomy_sub_struct_members(ptr_anomy);
+
+    py::class_<MyNamedStruct, Ref> named(module, "MyNamedStruct");
+    named.def(py::init(&MyNamedStruct::create), py::kw_only(),
+              py::arg("my_named_anomy_sub_struct") = py::none(),
+              py::arg("basic_member_value") = 0,
+              py::arg("ref_member_value") = py::none(),
+              py::arg("named_basic_member_value") = named_int(0),
+              py::arg("named_ref_member_value") = py::none())
         .def("__copy__", &MyNamedStruct::copy)
-        .def("echo_non_ptr", &MyNamedStruct::echo_non_ptr)
-        .def("echo_ptr", &MyNamedStruct::echo_ptr)
-        .def("inc_basic_ptr", &MyNamedStruct::inc_basic_ptr)
-        .def("inc_basic_non_ptr", &MyNamedStruct::inc_basic_non_ptr);
+        .def("addr", &MyNamedStruct::addr);
+    def_my_named_struct_members(named);
+    py::class_<PtrMyNamedStruct, Ptr> ptr_named(module, "PtrMyNamedStruct");
+    ptr_named.def(py::init(&PtrMyNamedStruct::from_value), py::arg("value").noconvert().none(false))
+        .def_static("from_value", &PtrMyNamedStruct::from_value,
+                    py::arg("value").noconvert().none(false))
+        .def_property("value", &PtrMyNamedStruct::value, &PtrMyNamedStruct::set_value);
+    def_my_named_struct_members(ptr_named);
 
     module.def("fn_echo_non_struct_int", &fn_echo_non_struct_int, py::arg("i"));
     module.def("fn_echo_non_struct_slice_int", &fn_echo_non_struct_slice_int,

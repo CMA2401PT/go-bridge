@@ -90,6 +90,22 @@ func SBIntPtrLoad(id C.uintptr_t) C.intptr_t { return C.intptr_t(*Get[api.IntPtr
 func SBIntPtrStore(id C.uintptr_t, value C.intptr_t) { *Get[api.IntPtr](id) = int(value) }
 
 // ---------------------------------------------------------------------------
+// Structs, as in 06: T and *T have separate Python classes whose handles both
+// pin a *T, so they share every export.
+
+// copyStruct is Go's p := new(T); *p = v.
+func copyStruct[T any](id C.uintptr_t) C.uintptr_t {
+	value := *Get[*T](id)
+	return Pin(&value)
+}
+
+// aliasStruct is Go's &v, and *p read as a variable: the struct is shared.
+func aliasStruct[T any](id C.uintptr_t) C.uintptr_t { return Pin(Get[*T](id)) }
+
+// storeStruct is Go's *p = v.
+func storeStruct[T any](id, value C.uintptr_t) { *Get[*T](id) = *Get[*T](value) }
+
+// ---------------------------------------------------------------------------
 // Counter and Inner appear only as Box fields; the closure generates them.
 
 //export SBCounterEcho
@@ -104,8 +120,17 @@ func SBInnerGetN(id C.uintptr_t) C.intptr_t { return C.intptr_t(Get[*api.Inner](
 //export SBInnerSetN
 func SBInnerSetN(id C.uintptr_t, n C.intptr_t) { Get[*api.Inner](id).N = int(n) }
 
+//export SBInnerCopy
+func SBInnerCopy(id C.uintptr_t) C.uintptr_t { return copyStruct[api.Inner](id) }
+
+//export SBInnerAlias
+func SBInnerAlias(id C.uintptr_t) C.uintptr_t { return aliasStruct[api.Inner](id) }
+
+//export SBInnerStore
+func SBInnerStore(id, value C.uintptr_t) { storeStruct[api.Inner](id, value) }
+
 // ---------------------------------------------------------------------------
-// Box, as in 06_named_type: the handle pins a *Box.
+// Box and *Box, as in 06_named_type: both handles pin a *Box.
 
 // A 0 inner handle keeps the zero value.
 //
@@ -138,9 +163,17 @@ func SBBoxEcho(id C.uintptr_t) C.SBString { return cString(Get[*api.Box](id).Ech
 //export SBBoxInc
 func SBBoxInc(id C.uintptr_t) { Get[*api.Box](id).Inc() }
 
-// **Box. *Box is represented by the Box wrapper itself, so the target of
-// this pointer is a Box handle; storing one copies the pointer, not the
-// struct. **Box has an empty method set in Go.
+//export SBBoxCopy
+func SBBoxCopy(id C.uintptr_t) C.uintptr_t { return copyStruct[api.Box](id) }
+
+//export SBBoxAlias
+func SBBoxAlias(id C.uintptr_t) C.uintptr_t { return aliasStruct[api.Box](id) }
+
+//export SBBoxStore
+func SBBoxStore(id, value C.uintptr_t) { storeStruct[api.Box](id, value) }
+
+// **Box. Its target is a *Box, a PtrBox handle; storing one copies the
+// pointer, not the struct. **Box has an empty method set in Go.
 //
 //export SBNewPtrPtrBox
 func SBNewPtrPtrBox(box C.uintptr_t) C.uintptr_t { return newPtr(Get[*api.Box](box)) }

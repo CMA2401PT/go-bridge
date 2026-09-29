@@ -57,7 +57,9 @@ func SBPtrIntStore(id C.uintptr_t, value C.intptr_t, panicked *C.SBString) {
 }
 
 // ---------------------------------------------------------------------------
-// List: the wrapper pins a *List, so handle 0 is a nil *List.
+// List and *List, as in 06: both wrappers pin a *List and share the field and
+// method exports. A List is a variable and never nil; handle 0 is a nil
+// *List, which only PtrList can hold.
 
 // A 0 next handle is a nil Next, which is also the zero value.
 //
@@ -93,6 +95,37 @@ func SBListGetNext(id C.uintptr_t, panicked *C.SBString) C.uintptr_t {
 func SBListSetNext(id, next C.uintptr_t, panicked *C.SBString) {
 	defer guard(panicked)
 	Get[*api.List](id).Next = Get[*api.List](next)
+}
+
+// Go's p := new(List); *p = v. The source is a List, never nil.
+//
+//export SBListCopy
+func SBListCopy(id C.uintptr_t) C.uintptr_t {
+	value := *Get[*api.List](id)
+	return Pin(&value)
+}
+
+// Go's &v: shares the variable.
+//
+//export SBListAddr
+func SBListAddr(id C.uintptr_t) C.uintptr_t { return Pin(Get[*api.List](id)) }
+
+// Go's *p, read as the variable it names; dereferencing nil panics.
+//
+//export SBPtrListLoad
+func SBPtrListLoad(id C.uintptr_t, panicked *C.SBString) C.uintptr_t {
+	defer guard(panicked)
+	p := Get[*api.List](id)
+	_ = *p
+	return Pin(p)
+}
+
+// Go's *p = v: the struct is copied in.
+//
+//export SBPtrListStore
+func SBPtrListStore(id, value C.uintptr_t, panicked *C.SBString) {
+	defer guard(panicked)
+	*Get[*api.List](id) = *Get[*api.List](value)
 }
 
 // Pointer receivers run on a nil *List; the method decides what nil means.

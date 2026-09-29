@@ -15,15 +15,16 @@ go test -race ./examples/09_nil/expected/go
 ```python
 import go_nil as bridge
 
-empty = bridge.List.nil()           # Go: var l *List
+empty = bridge.PtrList.nil()        # Go: var l *List
 assert empty.is_nil                 # l == nil
 assert empty.len() == 0             # nil 接收者：Go 方法自行处理 nil
 values = empty.push(2).push(1)
 assert bridge.find(values, 9).is_nil   # 返回 nil
 assert values.next.next.is_nil         # 指针字段为 nil
+node = bridge.List(value_=3)        # List 是变量，永远非 nil
 
 try:
-    empty.value                     # 解引用 nil
+    empty.value_                    # 解引用 nil
 except bridge.GoPanic:              # RuntimeError 的子类
     pass
 bridge.must_positive(-1)            # GoPanic("not positive: -1")，进程不崩溃
@@ -31,12 +32,13 @@ bridge.must_positive(-1)            # GoPanic("not positive: -1")，进程不崩
 
 ## nil：handle 0 的同类包装
 
-**handle 0 表示该 Go 类型的零值**，对指针、命名指针与 struct 包装（`*T`）就是
-nil。它是一个普通的同类对象，只是不持有 Pin。
+**handle 0 表示指针类型的零值 nil**，只用于指针类与命名指针。它是一个普通的同类
+对象，只是不持有 Pin。struct 包装 `List` 是一个 Go 变量，永远非 nil；可以为 nil 的
+是它的指针类 `PtrList`（06）。
 
 | Go | ABI | Python |
 | --- | --- | --- |
-| `var p *T` | handle 0 | `T.nil()` |
+| `var p *T` | handle 0 | `PtrT.nil()` |
 | `p == nil` | `id == 0` | `p.is_nil`（只读） |
 | nil 参数 | 传 0，`Get[*T](0)` 返回 nil | 传 nil 包装 |
 | nil 返回值、指针字段 | `PinPointer` 把 nil 转为 0，不 Pin | `is_nil` 为真的同类对象 |
@@ -63,11 +65,18 @@ nil。它是一个普通的同类对象，只是不持有 Pin。
 | 指针接收者 `func (l *List) Len()` | 交给 Go 执行 | Go 允许 nil 接收者 |
 | 指针接收者且内部解引用 `First()` | Go panic → `GoPanic` | 与 Go 相同 |
 | 值接收者 `func (l List) Head()` | `(*l).Head()` panic → `GoPanic` | Go 需要先解引用 |
-| 字段读写、`PtrInt.value` | panic → `GoPanic` | 解引用 nil |
+| 字段读写、`PtrInt.value`、`PtrList.value` | panic → `GoPanic` | 解引用 nil |
 
-指针字段 `Next *List` 读出的是字段中保存的**指针**，而不是 06 中 struct 字段的
-视图 `&s.Field`：读写都共享被指向的链表，nil 读出为 `is_nil` 的 `List`，零值
-就是 nil。赋值 `head.next = x` 复制指针。构造函数中省略的 `next` 默认为 nil。
+`List` 与 `PtrList` 有相同的字段与方法（06）。`List` 上的调用永远不会遇到 nil，
+nil 检查只发生在 `PtrList` 上。
+
+指针字段 `Next *List` 的类型是 `PtrList`，读出的是字段中保存的**指针**，而不是
+06 中 struct 字段的视图 `&s.Field`：读写都共享被指向的链表，nil 读出为 `is_nil`
+的 `PtrList`，零值就是 nil。赋值 `head.next = x.addr()` 复制指针。构造函数中省略的
+`next` 默认为 nil。`push`、`find` 返回的也是 `PtrList`。
+
+Go 字段 `Value` 与指针类的 `.value`（`*p`）冲突，所以字段在 `List` 与 `PtrList` 上
+都叫 `value_`，构造参数同名。这是生成器的通用规则，见 [`../types.md`](../types.md)。
 
 链表形成环（`head.next = head`）时，环只存在于 Go 堆中；Python 包装对象各自只
 持有一个 Pin，不产生跨边界引用环。
@@ -101,7 +110,8 @@ map 写、栈溢出）无法 recover，仍会终止进程。
 
 ## 验证
 
-Python 测试覆盖：nil 是同类对象且不 Pin、指向 0 的指针不是 nil、`is_nil` 只读、
+Python 测试覆盖：nil 是同类对象且不 Pin、`List` 没有 nil 且与 `PtrList` 互不接受、
+`addr()` 与 `.value` 共享、指向 0 的指针不是 nil、`is_nil` 只读、
 `bool()` 被拒绝、解引用 nil 与写入 nil 抛 `GoPanic`、nil 参数与返回值、nil 接收者
 正常执行、nil 接收者内部 panic、值接收者与字段访问 panic、指针字段共享与 nil
 零值、环、`find` 返回 nil、节点在父包装释放后可达、显式 panic 的消息、panic 后

@@ -8,6 +8,10 @@ from ._native import (
     MyNamedNonStructSliceInt,
     MyNamedStruct,
     MyNamedSubStruct,
+    Ptr,
+    PtrMyNamedAnomySubStruct,
+    PtrMyNamedStruct,
+    PtrMyNamedSubStruct,
     Ref,
     Slice,
     SliceInt,
@@ -17,8 +21,9 @@ from ._native import (
     ptr_fn_echo_ptr,
 )
 
-# Slice is generic in __init__.pyi; allow the same subscript at runtime.
+# Slice and Ptr are generic in __init__.pyi; allow the same subscript at runtime.
 Slice.__class_getitem__ = classmethod(GenericAlias)
+Ptr.__class_getitem__ = classmethod(GenericAlias)
 
 __all__ = [
     "MyNamedAnomySubStruct",
@@ -26,6 +31,10 @@ __all__ = [
     "MyNamedNonStructSliceInt",
     "MyNamedStruct",
     "MyNamedSubStruct",
+    "Ptr",
+    "PtrMyNamedAnomySubStruct",
+    "PtrMyNamedStruct",
+    "PtrMyNamedSubStruct",
     "Ref",
     "Slice",
     "SliceInt",

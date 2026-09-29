@@ -33,7 +33,7 @@ class ClosureTests(unittest.TestCase):
     def test_every_dependent_type_exists(self) -> None:
         # G only names ***int, IntPtr and Box; the rest come from the closure.
         for name in ["PtrPtrPtrInt", "PtrPtrInt", "PtrInt", "IntPtr", "Box", "Inner",
-                     "Counter", "PtrPtrBox"]:
+                     "Counter", "PtrBox", "PtrInner", "PtrPtrBox"]:
             self.assertTrue(hasattr(bridge, name), name)
         # Built from basic values upwards, one level at a time.
         ppp = bridge.PtrPtrPtrInt(bridge.PtrPtrInt(bridge.PtrInt(1)))
@@ -180,29 +180,47 @@ class StructPtrTests(Holders):
 
     def test_pointer_to_struct_pointer(self) -> None:
         box = bridge.Box()
-        pp = box.ptr()  # **Box holding this *Box: the struct is shared.
+        p = box.addr()  # *Box: shares the struct.
+        self.assertIs(type(p), bridge.PtrBox)
+        pp = p.ptr()  # **Box holding a copy of p.
         self.assertIs(type(pp), bridge.PtrPtrBox)
         bridge.inc_box_pp(pp)
         self.assertEqual(box.echo(), "box: {1 {1}}")
         view = pp.value
-        self.assertIs(type(view), bridge.Box)
+        self.assertIs(type(view), bridge.PtrBox)
         view.inner.n = 10  # Same struct through every level.
         self.assertEqual(box.inner.n, 10)
         other = bridge.Box(count=bridge.Counter(5))
-        pp.value = other  # *pp = other: the pointer is copied, not the struct.
+        pp.value = other.addr()  # *pp = &other: the pointer is copied, not the struct.
         bridge.inc_box_pp(pp)
         self.assertEqual(other.echo(), "box: {6 {1}}")
         self.assertEqual(box.echo(), "box: {1 {10}}")
-        self.assertIs(type(bridge.PtrPtrBox.from_value(box)), bridge.PtrPtrBox)
+        self.assertIs(type(bridge.PtrPtrBox.from_value(p)), bridge.PtrPtrBox)
         self.assertFalse(hasattr(pp, "inc"))  # Empty method set.
-        for bad in [None, bridge.Inner(), bridge.PtrInt()]:
+        self.assertFalse(hasattr(box, "ptr"))  # A Box is not a pointer; use addr().
+        for bad in [None, box, bridge.Inner(), bridge.PtrInt()]:
             with self.assertRaises(TypeError):
                 bridge.PtrPtrBox(bad)  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
                 bridge.inc_box_pp(bad)  # type: ignore[arg-type]
         with self.assertRaises(TypeError):
-            bridge.inc_box_pp(box)  # type: ignore[arg-type]
+            bridge.inc_box_pp(p)  # type: ignore[arg-type]
 
+    def test_closure_struct_pointers(self) -> None:
+        box = bridge.Box(inner=bridge.Inner(n=1))
+        p = bridge.PtrBox(box)  # Go's p := new(Box); *p = box copies.
+        p.inc()
+        self.assertEqual((box.inner.n, p.inner.n), (1, 2))
+        self.assertIs(type(p.value), bridge.Box)
+        inner = box.inner.addr()  # &box.Inner
+        self.assertIs(type(inner), bridge.PtrInner)
+        inner.n = 3
+        self.assertEqual(box.inner.n, 3)
+        inner.value = bridge.Inner(n=4)  # *p = v copies in.
+        self.assertEqual(box.echo(), "box: {0 {4}}")
+        self.assertEqual(bridge.PtrInner.from_value(bridge.Inner(n=5)).n, 5)
+        with self.assertRaises(TypeError):
+            box.inner = inner  # type: ignore[assignment]
 
 if __name__ == "__main__":
     suite = unittest.TestSuite()

@@ -26,7 +26,7 @@ bridge.inc_int_ptr(n)
 assert n.unname().value == 3        # Go: (*int)(n)
 
 box = bridge.Box()                  # Counter 与 Inner 由闭包生成
-bridge.inc_box_pp(box.ptr())        # **Box 指向同一个 struct
+bridge.inc_box_pp(box.addr().ptr()) # &box 再取地址：**Box 指向同一个 struct
 ```
 
 ## 类型闭包
@@ -38,8 +38,9 @@ G 只直接出现 `***int`、`**int`（`Retarget`）、`IntPtr`、`Box`、`**Box
 | --- | --- | --- |
 | `***int` | `**int` → `*int` → `int` | 每级 `.value` 与构造参数 |
 | `IntPtr`（底层 `*int`） | `*int` | `unname()` 与构造参数 |
-| `Box` | `Counter`、`Inner` | 字段与构造参数 |
-| `**Box` | `*Box`，即 `Box` 类 | `.value` 与构造参数 |
+| `Box` | `Counter`、`Inner`、`*Box` | 字段与构造参数；`addr()` |
+| `Inner`（闭包生成的 struct） | `*Inner` | `addr()` |
+| `**Box` | `*Box` → `Box` | `.value` 与构造参数 |
 
 本例中 `*int` 即使 G 中没有出现也会生成；而 `****int` 没有出现，所以
 `PtrPtrPtrInt` 没有 `ptr()`。`ptr()` 只在对应的指针类存在时才有。
@@ -78,11 +79,14 @@ Python 不能构造 nil，但 Go 代码可以写入：`clear(pp)` 执行 `*pp = 
 
 ## `**Box`
 
-`*Box` 由 `Box` 类表示（06），所以 `**Box` 是 `PtrPtrBox(Ptr[Box])`：
+`*Box` 是 `PtrBox`（06），所以 `**Box` 是 `PtrPtrBox(Ptr[PtrBox])`，与 `**int` 同一
+条规则，没有例外：
 
-- `box.ptr()` 是新的 `**Box` 变量，其中是 `box` 的指针，struct 本身共享。
-- `pp.value` 返回同一个 struct 的新 `Box` 包装；`pp.value = other` 复制指针。
-- `Box` 与 `PtrPtrBox` 互不接受：`inc_box_pp(box)` 抛 `TypeError`。
+- `box.addr()` 即 `&box`；`p.ptr()` 是新的 `**Box` 变量，其中是 `p` 的副本，struct
+  本身共享。`Box` 没有 `ptr()`，要先 `addr()`。
+- `pp.value` 返回同一个 struct 的新 `PtrBox` 包装；`pp.value = other.addr()` 复制指针。
+- `Box`、`PtrBox` 与 `PtrPtrBox` 互不接受：`inc_box_pp(box)` 与 `inc_box_pp(p)` 都抛
+  `TypeError`。
 
 ## 所有权与边界
 
@@ -95,8 +99,9 @@ Python 不能构造 nil，但 Go 代码可以写入：`clear(pp)` 执行 `*pp = 
 
 Python 测试覆盖：闭包生成的类都存在并可逐层构造、各级共享目标、`.value` 为新包装、
 修改只影响一级、每次构造分配新变量、中间 Ref 释放后仍可用、nil 级、每级严格类型、
-`**T` 无方法、命名指针转换与严格类型、闭包生成的字段类型、`**Box` 共享 struct 与
-复制指针。Go 测试覆盖各级指针复制、Load 的新句柄、nil 级、命名指针共享与 `**Box`。
+`**T` 无方法、命名指针转换与严格类型、闭包生成的字段类型与 struct 指针类、
+`**Box` 共享 struct 与复制指针。Go 测试覆盖各级指针复制、Load 的新句柄、nil 级、
+命名指针共享与 `**Box`。
 
 ```sh
 GOEXPERIMENT=cgocheck2 python examples/build.py 08_multi_ptr --test
@@ -108,5 +113,5 @@ MYPYPATH=examples/.build/08_multi_ptr/python mypy examples/08_multi_ptr/test.py 
 
 生成器需要在 `go/types` 上从 G 的全部签名、字段与方法出发计算类型闭包：遇到
 指针取基类型、遇到非 struct 的命名类型取底层类型、遇到 slice 取元素、遇到
-struct 取导出字段类型，直到基础值类型；类名按 Go 类型拼写。还需要知道哪些指针类型
+struct 取导出字段类型并补上 `*T`，直到基础值类型；类名按 Go 类型拼写。还需要知道哪些指针类型
 出现在闭包中，以决定值类是否有 `ptr()`；以及方法集只包含一层解引用。

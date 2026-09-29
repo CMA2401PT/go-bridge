@@ -155,11 +155,26 @@ func SBFnEchoNonStructSliceInt(si C.uintptr_t) C.SBString {
 // even when several Refs reach the same struct or a field inside it (an
 // embedded field at offset 0 shares its parent's address). The pointer keeps
 // the struct, and for a field view the whole parent, reachable.
+//
+// T and *T have separate Python classes but the same handle, a pinned *T, so
+// they share every export below; only the Python types differ.
 
-// copyStruct is Go's v := *p; slice fields still share their arrays.
+// copyStruct is Go's v := *p, and also p := new(T); *p = v; slice fields
+// still share their arrays.
 func copyStruct[T any](id C.uintptr_t) C.uintptr_t {
 	value := *Get[*T](id)
 	return Pin(&value)
+}
+
+// aliasStruct pins the same *T under a new handle: T's addr() (Go's &v) and
+// *T's value (Go's *p, a variable) both share the struct.
+func aliasStruct[T any](id C.uintptr_t) C.uintptr_t {
+	return Pin(Get[*T](id))
+}
+
+// storeStruct is Go's *p = v: the struct is copied in.
+func storeStruct[T any](id, value C.uintptr_t) {
+	*Get[*T](id) = *Get[*T](value)
 }
 
 // MyNamedSubStruct
@@ -184,6 +199,16 @@ func SBMyNamedSubStructCopy(id C.uintptr_t) C.uintptr_t {
 	return copyStruct[api.MyNamedSubStruct](id)
 }
 
+//export SBMyNamedSubStructAlias
+func SBMyNamedSubStructAlias(id C.uintptr_t) C.uintptr_t {
+	return aliasStruct[api.MyNamedSubStruct](id)
+}
+
+//export SBMyNamedSubStructStore
+func SBMyNamedSubStructStore(id, value C.uintptr_t) {
+	storeStruct[api.MyNamedSubStruct](id, value)
+}
+
 // MyNamedAnomySubStruct
 
 //export SBNewMyNamedAnomySubStruct
@@ -204,6 +229,16 @@ func SBMyNamedAnomySubStructSetBasicMemberValue2(id C.uintptr_t, value C.intptr_
 //export SBMyNamedAnomySubStructCopy
 func SBMyNamedAnomySubStructCopy(id C.uintptr_t) C.uintptr_t {
 	return copyStruct[api.MyNamedAnomySubStruct](id)
+}
+
+//export SBMyNamedAnomySubStructAlias
+func SBMyNamedAnomySubStructAlias(id C.uintptr_t) C.uintptr_t {
+	return aliasStruct[api.MyNamedAnomySubStruct](id)
+}
+
+//export SBMyNamedAnomySubStructStore
+func SBMyNamedAnomySubStructStore(id, value C.uintptr_t) {
+	storeStruct[api.MyNamedAnomySubStruct](id, value)
 }
 
 // MyNamedStruct
@@ -308,8 +343,19 @@ func SBMyNamedStructCopy(id C.uintptr_t) C.uintptr_t {
 	return copyStruct[api.MyNamedStruct](id)
 }
 
+//export SBMyNamedStructAlias
+func SBMyNamedStructAlias(id C.uintptr_t) C.uintptr_t {
+	return aliasStruct[api.MyNamedStruct](id)
+}
+
+//export SBMyNamedStructStore
+func SBMyNamedStructStore(id, value C.uintptr_t) {
+	storeStruct[api.MyNamedStruct](id, value)
+}
+
 // Methods: a value receiver gets a copy of *p, a pointer receiver gets p, so
-// its writes are visible through every Ref to the same struct.
+// its writes are visible through every Ref to the same struct. MyNamedStruct
+// and PtrMyNamedStruct both call these.
 
 //export SBMyNamedStructEchoNonPtr
 func SBMyNamedStructEchoNonPtr(id C.uintptr_t) C.SBString {
