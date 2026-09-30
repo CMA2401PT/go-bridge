@@ -1,10 +1,11 @@
 # 类型映射总览
 
-本文汇总 01–09 已确认的 Go → Python 类型规则，是各案例 readme 的索引与上位约定。
+本文汇总 01–10 已确认的 Go → Python 类型规则，是各案例 readme 的索引与上位约定。
 具体 ABI、测试与限制见对应案例。本文描述手写样例；当前生成器的契约见
 [实施计划](../docs/generator-plan.md)与[运行时协议](../docs/generator-runtime.md)。
 特别是下文的 GoPanic/recover 仅描述 09 的历史实现：生成器已取消恢复，未恢复的 Go
 panic（包括 nil 解引用）会终止整个 Python 进程。
+10 使用当前句柄和 panic 协议验证 any 映射；any 尚未进入生成器支持域。
 
 ## Go 类型分类
 
@@ -14,6 +15,7 @@ panic（包括 nil 解引用）会终止整个 Python 进程。
 | 引用类型 | `[]int`、`[]byte` | 共享底层数据，由 Go 管理 |
 | 指针类型 | `*int`、`*[]int`、`*MyInt`、`**int` | 指向一个 Go 变量 |
 | 命名类型 | `type MyInt int`、`type MySlice []int`、`type MyStruct struct{...}` | 可以绑定方法，与底层类型是不同类型 |
+| 空 interface | `any`、`interface{}` | 保存动态类型和值，用 GoAny 持有，显式装箱和断言 |
 | 匿名 struct | `func F() struct{ X int }` | 不支持 |
 
 `type MyStruct struct{...}` 是底层类型为 struct 的命名类型，不属于匿名 struct。
@@ -44,9 +46,11 @@ panic（包括 nil 解引用）会终止整个 Python 进程。
    `type IntPtr *int` 就会生成 `PtrInt`。任何 `.value`、`unname()`、字段和构造
    参数的类型都一定存在，且总能从基础值类型逐层构造出来（08）。
 
-6. **nil 是带类型的零值包装。** handle 0 表示指针类型的零值 nil，只有指针类与
-   命名指针可以是 nil；struct 包装是变量，永远非 nil。Python 的 `None` 不表示 nil，一律拒绝；nil
-   的类型与 Go 一样是静态的，所以 nil 接收者也能调用方法（09）。
+6. **nil 是带类型的零值包装。** handle 0 表示指针或 any 的零值 nil，指针类、
+   命名指针与 GoAny 可以是 nil；struct 包装是变量，永远非 nil。Python 的 `None`
+   不表示 Go nil，作为 Go 值输入一律拒绝；nil 的类型与 Go 一样是静态的，所以
+   nil 接收者也能调用方法（09）。
+   GoAny 中带类型的 nil 不等于 nil interface（10）；try 断言的 None 结果只表示失败。
 
 ## 基础值类型
 
@@ -166,7 +170,34 @@ panic（包括 nil 解引用）会终止整个 Python 进程。
 - **nil 接收者**：指针接收者方法原样交给 Go，Go 方法可以自行处理 nil。
 - **panic**：每个导出函数由适配层 `recover`，把 panic 消息返回给 C++，抛
   `GoPanic(RuntimeError)`，不会让进程崩溃。已 Pin 的参数不受影响。
-- slice 的 nil 与空 slice 在 Go 中行为基本一致，暂不区分，也没有 `is_nil`。
+- slice 包装的 Python API 暂不区分 nil 与空 slice，没有 `is_nil`；内部保留 Go 的
+  nil 状态，any 装箱与取出也不会丢失它（10）。
+
+## any：显式装箱与类型断言
+
+`any`／`interface{}` → `GoAny(Ref)`（10）。参数只接受 GoAny，返回值统一为 GoAny；
+GoAny 保存一个不可直接修改的 interface 值，与 Python `typing.Any` 无关。
+
+- 基础值使用模块函数，如 `int_as_any(v)`、`any_as_int(a)`、
+  `try_any_as_int(a)`。按 Go 类型区分整数宽度、float32/float64、bool、string。
+- 其他已映射具体类型，包括命名标量，提供 `v.as_any()`、`T.from_any(a)`、
+  `T.try_from_any(a)`。GoAny 本身直接作为 any 参数传入，不重复提供这组转换。
+- 装箱保留准确的 Go 动态类型，取出执行具体类型断言，不执行类型转换。
+  `MyInt` 与 int、命名 slice 与底层 slice、T 与 `*T` 均不互认。
+- 普通断言不匹配抛 TypeError；try 不匹配返回 None，成功返回 `T`，标注为
+  `T | None`。None 只表示断言失败；类型匹配后的转换异常仍抛出。
+- struct 装箱复制 T，成功取出再复制为独立的可寻址变量；不能将 Cell 中的 `*T`
+  当成 T 装箱，也不能提供 interface 内部 struct 的可修改视图。slice 复制头并
+  共享数组，指针复制指针值并共享目标；struct 的复制是浅复制。
+- `GoAny.nil()`／`is_nil` 判断 nil interface，句柄为 0；装有带类型 nil 的
+  GoAny 非 nil、持有非零句柄。成功取出的 nil 指针返回对应指针包装，不能返回 None。
+  GoAny 的 bool 判断被拒绝，应使用 is_nil；try 结果使用 `is None` 判断失败。
+- any 的 Cell 保留原动态类型。命名 slice／指针在装箱前恢复名字，取出后才按其
+  既有 Cell 归一化。非 nil GoAny 和非 nil 对象结果各自拥有独立句柄。
+- any 不扩展静态类型闭包。Go 返回的未知动态类型可以持有、传回；只有已映射的
+  类型提供 Python 侧取出操作。带方法／命名 interface、`*any`、`[]any` 暂未覆盖。
+
+具体失败协议、ABI、字段和生命周期见 [10_any](10_any/readme.md)。
 
 ## 方法集
 
@@ -182,11 +213,12 @@ panic（包括 nil 解引用）会终止整个 Python 进程。
 
 ## 生命周期与边界
 
-- 一个 Pin 对应一个 Ref；视图、读出的 slice、`p.value` 都是新的 Pin。Go 值中从不
-  保存句柄，没有跨边界引用环。被指向的数据由 Go 可达性管理。
+- 一个持有关系对应一个 Ref（04–09 用 Pin，10 用 cgo.Handle）；视图、读出的
+  slice、`p.value` 都创建新的持有关系。Go 值中从不保存句柄，没有跨边界引用环。
+  被指向的数据由 Go 可达性管理。
 - nil 与 panic 见上节。06–08 的 Ref 早于 09，仍不接受 nil、不 recover；08 读取
-  nil 级时抛 `ValueError` 是临时行为，生成器应统一按 09 处理。
-- `T` 与 `PtrT` 的句柄都是 Pin 的 `*T`，共用字段与方法导出；只是 Python 类型不同。
+  nil 级时抛 `ValueError` 是临时行为。生成器的 nil 表示参考 09，panic 按当前协议处理。
+- struct `T` 与 `PtrT` 的句柄都持有 `*T`，共用字段与方法导出；只是 Python 类型不同。
 - 匿名 struct 不支持：出现在参数、返回值中的 API 不生成；命名 struct 中类型为
   匿名 struct 的字段跳过，由生成器给出警告。
-- 未覆盖：指针相等、标量字段取地址 `&s.X`、map、interface、error。
+- 未覆盖：指针相等、标量字段取地址 `&s.X`、map、带方法／命名 interface、error。

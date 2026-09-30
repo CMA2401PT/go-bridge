@@ -5,6 +5,7 @@
 生成器的当前能力与路线见 [`../docs/generator-plan.md`](../docs/generator-plan.md)。
 生成产物不要求逐字匹配 expected；历史案例规则有版本差异：nil 表示参考 09；生成器不捕获 Go panic，
 未恢复的 panic 终止整个 Python 进程，09 的恢复实现仅保留为实验记录。
+10_any 使用当前的 cgo.Handle 与不恢复 panic 协议验证 any 映射；生成器仍不支持 any/interface。
 
 ## 目录约定
 
@@ -110,7 +111,8 @@ pybind11 扩展完成，不使用 ctypes。公共工具只负责构建，不推�
 - [`07_ptr_basic`](07_ptr_basic/readme.md)：Python 中不可寻址的值类型（标量、slice 及其命名类型）的指针，值与指针的转换和方法集。
 - [`08_multi_ptr`](08_multi_ptr/readme.md)：多级指针、命名指针，以及生成器必须补齐的依赖类型（类型闭包）。
 - [`09_nil`](09_nil/readme.md)：带类型的 nil、nil 接收者，以及历史 panic 恢复实验（生成器不采用该恢复协议）。
-- 后续：数组、error、map、interface、callback 与并发等。
+- [`10_any`](10_any/readme.md)：显式 any 装箱、准确动态类型断言、try 的 `T | None`、复制与共享、nil interface 与带类型 nil，以及未知动态类型的持有。
+- 后续：数组、error、map、带方法／命名 interface、callback 与并发等。
 
 编号代表研究顺序。后续案例如暴露旧规则的问题，应先修正文档和黄金样例，再实现
 生成逻辑。当前公共构建约定可以随真实案例需要调整，不预先引入复杂的配置机制。
