@@ -156,13 +156,16 @@ nil slice 也具有动态类型。`nil_slice()` 与 `empty_slice()` 都返回非
 | Go 值 | Cell | ABI |
 | --- | --- | --- |
 | nil interface | 无 Cell | 句柄 0 |
-| 非 nil interface（含带类型 nil） | `anyCell{value: 原 any 值}` | 拥有的非零整数句柄 |
+| 非 nil interface（含带类型 nil） | 直接保存原 any 值 | 拥有的非零整数句柄 |
 | 标量断言结果 | 不使用 Cell | 标量／BrString，加 ok 字段 |
 | 对象断言结果 | 对应类型既有 Cell | 拥有的句柄，加 ok 字段 |
 
-any Cell 单独定义，避免与具体类型的内部表示混用。装箱前恢复原 Go 类型，取出
-后再转为既有 Cell：例如 MySlice 的 Cell 是 `[]int`，装箱须先还原 MySlice；
-IntPtr 的 Cell 是 `*int`，装箱须先还原 IntPtr。any 内部不能剥去命名类型身份。
+非 nil any 直接交给 `cgo.NewHandle` 保存，读取时使用 `cgo.Handle.Value()`，不增加
+anyCell 包装。装箱前恢复原 Go 类型，取出后再转为既有 Cell：例如 MySlice 的
+Cell 是 `[]int`，装箱须先还原 MySlice；IntPtr 的 Cell 是 `*int`，装箱须先还原
+IntPtr。any 内部不能剥去命名类型身份。
+
+Python 入口检查参数是否为已初始化的 GoAny；Go 侧不额外检查 any 句柄的类别。
 
 输入句柄借用；每次成功装箱、非 nil any 返回、非 nil 对象取出均创建独立句柄。
 GoAny 不借用来源 Ref 的句柄，来源释放后仍有效；取出的对象也能在 GoAny 释放后
@@ -170,7 +173,7 @@ GoAny 不借用来源 Ref 的句柄，来源释放后仍有效；取出的对象
 
 C++ 使用不可复制、可移动的 Ref 接管句柄，析构调用 BrRelease。创建 Python
 结果前，临时 Ref 已持有对象句柄，string 则由 C 缓冲区 owner 接管；转换异常不会
-遗失所有权。无效内部句柄或错误 Cell 类型直接 panic。
+遗失所有权。无效内部句柄直接 panic，Go panic 不恢复。
 
 ## 静态闭包与范围
 
@@ -182,7 +185,7 @@ Go 返回的 any 可以保存闭包外的动态类型，包括未导出的类型
 本例 `unknown()` 返回装有 `map[string]int` 的 GoAny；Python 能持有、传给 echo
 或 unknown_value，不能因此构造或操作 Python map 包装。
 
-后续生成器需要新增 any 的 Go 类型分类、Python GoAny 表示、any Cell 与 ABI
+后续生成器需要新增 any 的 Go 类型分类、Python GoAny 表示、any 句柄读写与 ABI
 断言操作计划；命名和冲突规划还需保留 GoAny、各基础值转换函数以及 as_any、
 from_any、try_from_any。对象适配层负责具体类型恢复和归一化，holder 只管理生命周期。
 
@@ -196,5 +199,5 @@ Python 测试覆盖全部基础类型及整数边界、动态类型不互认、�
 双向复制、slice／指针共享、多级和命名指针、nil interface、各类带类型 nil、
 nil slice 状态、any 字段快照、未知动态类型、显式装箱要求、未初始化包装、
 失败无分配、源／结果独立生命周期、Go 环、解码异常以及子进程中的 Go panic。
-静态检查验证 try 结果的类型收窄。Go 测试直接检查 any Cell、命名类型恢复和
+静态检查验证 try 结果的类型收窄。Go 测试直接检查句柄保存的动态值、命名类型恢复和
 归一化、struct 副本、nil 的 ok 字段及句柄释放。

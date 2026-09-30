@@ -38,22 +38,18 @@ func bridgePinPointer[T any](value *T) C.uintptr_t {
 	return bridgePin(value)
 }
 
-// An any Cell has its own shape. Its payload retains the actual Go dynamic
-// type, unlike the normalized Cells for named slices and named pointers.
-type anyCell struct{ value any }
-
 func bridgeAny(handle C.uintptr_t) any {
 	if handle == 0 {
 		return nil
 	}
-	return bridgeGet[anyCell](handle).value
+	return cgo.Handle(handle).Value()
 }
 
 func bridgePinAny(value any) C.uintptr_t {
 	if value == nil {
 		return 0
 	}
-	return bridgePin(anyCell{value})
+	return bridgePin(value)
 }
 
 //export BrRelease

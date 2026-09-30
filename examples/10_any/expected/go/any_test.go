@@ -114,11 +114,11 @@ func TestUnknownValuesAndOwnership(t *testing.T) {
 	}
 }
 
-func TestAnyCellIsSeparateFromConcreteCells(t *testing.T) {
+func TestAnyHandleStoresDynamicValueDirectly(t *testing.T) {
 	handle := BrIntAsAny(1)
 	defer BrRelease(handle)
-	if _, ok := cgo.Handle(handle).Value().(anyCell); !ok {
-		t.Fatal("any value has no dedicated Cell")
+	if value, ok := cgo.Handle(handle).Value().(int); !ok || value != 1 {
+		t.Fatal("any handle must store the original dynamic value directly")
 	}
 	if result := BrTryAnyAsInt(handle); result.ok != 1 || result.value != 1 {
 		t.Fatal("int assertion failed")
@@ -126,10 +126,4 @@ func TestAnyCellIsSeparateFromConcreteCells(t *testing.T) {
 	if result := BrTryAnyAsInt64(handle); result.ok != 0 {
 		t.Fatal("int and int64 must remain different dynamic types")
 	}
-	defer func() {
-		if recover() == nil {
-			t.Fatal("wrong concrete Cell must panic as an internal error")
-		}
-	}()
-	bridgeGet[[]int](handle)
 }

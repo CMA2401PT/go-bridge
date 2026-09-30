@@ -192,8 +192,8 @@ GoAny 保存一个不可直接修改的 interface 值，与 Python `typing.Any` 
 - `GoAny.nil()`／`is_nil` 判断 nil interface，句柄为 0；装有带类型 nil 的
   GoAny 非 nil、持有非零句柄。成功取出的 nil 指针返回对应指针包装，不能返回 None。
   GoAny 的 bool 判断被拒绝，应使用 is_nil；try 结果使用 `is None` 判断失败。
-- any 的 Cell 保留原动态类型。命名 slice／指针在装箱前恢复名字，取出后才按其
-  既有 Cell 归一化。非 nil GoAny 和非 nil 对象结果各自拥有独立句柄。
+- any 句柄直接保存原动态值，不增加 anyCell 包装。命名 slice／指针在装箱前恢复
+  名字，取出后才按其既有 Cell 归一化。非 nil GoAny 和非 nil 对象结果各自拥有独立句柄。
 - any 不扩展静态类型闭包。Go 返回的未知动态类型可以持有、传回；只有已映射的
   类型提供 Python 侧取出操作。带方法／命名 interface、`*any`、`[]any` 暂未覆盖。
 
