@@ -46,6 +46,9 @@ module.doc() = "Generated Go bindings";
 	for _, c := range p.Classes {
 		cppClass(&b, c)
 	}
+	for _, c := range p.AnyConversions {
+		cppAnyConversion(&b, p.Any, c)
+	}
 	for _, op := range p.Operations {
 		cppFunction(&b, op)
 	}

@@ -44,11 +44,13 @@ type Alias struct {
 }
 
 type Package struct {
-	Go        *gomodel.Package
-	Name      string // Python package name
-	Types     []*Type
-	Functions []*Function
-	Aliases   []Alias
+	Go             *gomodel.Package
+	Name           string // Python package name
+	Types          []*Type
+	Functions      []*Function
+	Aliases        []Alias
+	Any            *Type // GoAny, or nil when the closure has no empty interface
+	AnyConversions []*AnyConversion
 }
 
 var identifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z_0-9]*$`)
@@ -149,6 +151,9 @@ func Plan(g *gomodel.Package, name string) (*Package, error) {
 				return nil, err
 			}
 		}
+	}
+	if err := planAny(p, names); err != nil {
+		return nil, err
 	}
 	for _, d := range g.Declarations {
 		name := avoidKeyword(d.Name)

@@ -2,7 +2,7 @@
 
 本例定义 Go `any`／`interface{}` 如何映射为 Python API：显式装箱、按动态类型
 断言、nil interface 与带类型 nil、复制和共享，以及未知动态类型的持有与传回。
-这是手写行为样例，**当前生成器仍拒绝 any/interface**，尚未实现本例协议。
+这是手写行为样例，生成器已从生成产物验证本例协议，并另外验证 `*any`、`[]any` 组合。
 总体类型规则见 [`../types.md`](../types.md)。
 
 本例使用当前生成器的 `runtime/cgo.Handle`，不使用历史案例的地址句柄与 Pinner。
@@ -185,9 +185,10 @@ Go 返回的 any 可以保存闭包外的动态类型，包括未导出的类型
 本例 `unknown()` 返回装有 `map[string]int` 的 GoAny；Python 能持有、传给 echo
 或 unknown_value，不能因此构造或操作 Python map 包装。
 
-后续生成器需要新增 any 的 Go 类型分类、Python GoAny 表示、any 句柄读写与 ABI
-断言操作计划；命名和冲突规划还需保留 GoAny、各基础值转换函数以及 as_any、
-from_any、try_from_any。对象适配层负责具体类型恢复和归一化，holder 只管理生命周期。
+生成器分别规划 any 的 Go 类型分类、Python GoAny 表示、any 句柄读写与 ABI
+断言操作；命名和冲突规划包含 GoAny、各基础值转换函数以及 as_any、from_any、
+try_from_any。对象适配层负责具体类型恢复和归一化，holder 只管理生命周期。
+生成器实现与组合类型规则见 [any 协议](../../docs/generator-any.md)。
 
 本例不覆盖带方法的 interface、命名 interface、error、`*any`、`[]any`、跨生成
 模块的包装互传、动态方法调用、动态类型反射 API 或 interface 相等比较。

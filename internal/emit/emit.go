@@ -73,6 +73,13 @@ func Files(p *abi.Package) (map[string][]byte, error) {
 		}
 		result["go/holder.go"] = holder
 	}
+	if p.Any != nil {
+		anySource, err := format.Source([]byte(anyRuntime))
+		if err != nil {
+			return nil, fmt.Errorf("format any runtime: %w", err)
+		}
+		result["go/any.go"] = anySource
+	}
 	return result, nil
 }
 

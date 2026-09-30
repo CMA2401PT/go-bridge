@@ -116,7 +116,7 @@ func TestRoots(t *testing.T) {
 }
 
 func TestObjectDeterminism(t *testing.T) {
-	source := module(t, `type Count int; type Counts []Count; type Node struct { Value Count; Next *Node; Children []Node }; func (n *Node) Set(v Count) {n.Value=v}`)
+	source := module(t, `type Count int; type Counts []Count; type Node struct { Value Count; Next *Node; Children []Node; Data any; Values []any }; func (n *Node) Set(v Count) {n.Value=v}`)
 	first, second := filepath.Join(t.TempDir(), "first"), filepath.Join(t.TempDir(), "second")
 	for _, out := range []string{first, second} {
 		if err := Run(Config{Target: source, Output: out, Name: "objects"}); err != nil {

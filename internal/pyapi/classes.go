@@ -17,6 +17,7 @@ const (
 	SliceObject   Shape = "slice"
 	StructObject  Shape = "struct"
 	PointerObject Shape = "pointer"
+	AnyObject     Shape = "any"
 )
 
 // Field contains a visible Go selector and its single shared Python spelling.
@@ -35,6 +36,8 @@ func shape(t *gomodel.Type) Shape {
 		return SliceObject
 	case gomodel.Pointer:
 		return PointerObject
+	case gomodel.Interface:
+		return AnyObject
 	case gomodel.Named:
 		if t.Underlying == nil {
 			return StructObject
@@ -119,6 +122,7 @@ func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
 var bridgeMembers = map[string]bool{
 	"value": true, "is_nil": true, "nil": true, "from_value": true, "addr": true, "ptr": true,
 	"clone": true, "copy_to_py_list": true, "copy_to_py_bytes": true, "unname": true,
+	"as_any": true, "from_any": true, "try_from_any": true,
 }
 
 func memberName(owner *Type, name string) string {
@@ -132,6 +136,9 @@ func memberName(owner *Type, name string) string {
 // className gives named Go types their public name, and derives only unnamed
 // slice/pointer names. Distinct types with equal spellings are rejected later.
 func className(t *gomodel.Type) (string, error) {
+	if t.Kind == gomodel.Interface {
+		return "GoAny", nil
+	}
 	if t.Kind == gomodel.Named {
 		return avoidKeyword(t.Name), nil
 	}

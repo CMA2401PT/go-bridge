@@ -33,6 +33,10 @@ class Ptr(Ref, _typing.Generic[_Target]):
     def __bool__(self) -> _typing.Never: ...
 `)
 	}
+	conversions := make(map[*pyapi.Type]*pyapi.AnyConversion)
+	for _, c := range p.AnyConversions {
+		conversions[c.Type] = c
+	}
 	for _, t := range p.Types {
 		if t.Shape == pyapi.Builtin {
 			continue
@@ -47,7 +51,14 @@ class Ptr(Ref, _typing.Generic[_Target]):
 			base = fmt.Sprintf("Ptr[%q]", annotation(t.Elem))
 		}
 		fmt.Fprintf(b, "@_typing.final\nclass %s(%s):\n", t.Name, base)
-		stubConstructor(b, t)
+		if t.Shape == pyapi.AnyObject {
+			b.WriteString("    @_builtins.classmethod\n    def nil(cls) -> _typing.Self: ...\n    @_builtins.property\n    def is_nil(self) -> _builtins.bool: ...\n    def __bool__(self) -> _typing.Never: ...\n")
+		} else {
+			stubConstructor(b, t)
+		}
+		if c := conversions[t]; c != nil {
+			fmt.Fprintf(b, "    def %[1]s(self) -> %[4]s: ...\n    @_builtins.classmethod\n    def %[2]s(cls, value: %[4]s) -> _typing.Self: ...\n    @_builtins.classmethod\n    def %[3]s(cls, value: %[4]s) -> _typing.Self | None: ...\n", c.Box, c.Assert, c.TryAssert, p.Any.Name)
+		}
 		if t.Underlying != nil {
 			fmt.Fprintf(b, "    def unname(self) -> %s: ...\n", annotation(t.Underlying))
 		}

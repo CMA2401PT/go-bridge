@@ -5,7 +5,7 @@
 [实施计划](../docs/generator-plan.md)与[运行时协议](../docs/generator-runtime.md)。
 特别是下文的 GoPanic/recover 仅描述 09 的历史实现：生成器已取消恢复，未恢复的 Go
 panic（包括 nil 解引用）会终止整个 Python 进程。
-10 使用当前句柄和 panic 协议验证 any 映射；any 尚未进入生成器支持域。
+10 使用当前句柄和 panic 协议验证 any 映射；生成器已支持本例及 `*any`、`[]any` 组合。
 
 ## Go 类型分类
 
@@ -195,7 +195,8 @@ GoAny 保存一个不可直接修改的 interface 值，与 Python `typing.Any` 
 - any 句柄直接保存原动态值，不增加 anyCell 包装。命名 slice／指针在装箱前恢复
   名字，取出后才按其既有 Cell 归一化。非 nil GoAny 和非 nil 对象结果各自拥有独立句柄。
 - any 不扩展静态类型闭包。Go 返回的未知动态类型可以持有、传回；只有已映射的
-  类型提供 Python 侧取出操作。带方法／命名 interface、`*any`、`[]any` 暂未覆盖。
+  类型提供 Python 侧取出操作。生成器支持 `*any`、`[]any` 的既有指针／slice 操作；
+  带方法／命名 interface 暂未覆盖。
 
 具体失败协议、ABI、字段和生命周期见 [10_any](10_any/readme.md)。
 

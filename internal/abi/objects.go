@@ -96,6 +96,10 @@ func planImports(p *Package) types.Qualifier {
 			function(m)
 		}
 	}
+	// Conversions assert on named types even when no operation mentions them.
+	for _, c := range p.Python.AnyConversions {
+		use(c.Type)
+	}
 	targetUsed := len(p.Python.Functions) > 0 || paths[p.Python.Go.Path]
 	aliases := map[string]string{p.Python.Go.Path: "api"}
 	targetAlias := "_"

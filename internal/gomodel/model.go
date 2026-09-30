@@ -15,10 +15,11 @@ import (
 type Kind string
 
 const (
-	Basic   Kind = "basic"
-	Named   Kind = "named"
-	Slice   Kind = "slice"
-	Pointer Kind = "pointer"
+	Basic     Kind = "basic"
+	Named     Kind = "named"
+	Slice     Kind = "slice"
+	Pointer   Kind = "pointer"
+	Interface Kind = "interface"
 )
 
 // Type is one node of the type closure. Go is canonical (aliases have been

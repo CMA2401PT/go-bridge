@@ -15,6 +15,7 @@
 | Basic | `Name`、`Go` | int、string |
 | Slice | `Elem` | `[]int` 指向 int 节点 |
 | Pointer | `Elem` | `**int` 指向 `*int` 节点 |
+| Interface | `Go`，无静态动态类型依赖 | any、interface{} |
 | Named，底层非 struct | `Name`、`PackagePath`、`Underlying`、方法集 | `type Count int` 指向 int 节点 |
 | Named，底层 struct | `Name`、`PackagePath`、`Fields`、`Selectable`、方法集 | `type Node struct { Next *Node }` |
 
@@ -66,7 +67,9 @@ visit(t)
 沿用这条路径，而不是只报告一个缺少来源的类型名。
 
 前端同时执行支持域校验，并非无条件接纳所有合法 Go 类型。例如 named bool、泛型、
-匿名 struct、interface、map 都在这里被拒绝。named bool 的拒绝原因来自尚未确定的
+匿名 struct、命名／非空 interface、map 都在这里被拒绝。空 interface 通过完成后的
+`types.Interface.Empty()` 识别；any 与 interface{} 共用节点，不分析运行时动态值。
+named bool 的拒绝原因来自尚未确定的
 Python 表示；将来解决该映射时，也必须移除此处的限制。
 
 ## 方法声明与方法集查询
@@ -111,14 +114,15 @@ Python 表示；将来解决该映射时，也必须移除此处的限制。
 
 `className` 保留 named 类型名字，并为无名 slice/pointer 递归生成名字。
 `planClasses` 记录 Shape、Elem、Underlying、Pointer、可见字段、构造字段和选定的方法集。
-Shape 区分内建值、命名标量、slice、struct 和 pointer；ByteSlice 决定字节专用传输接口。
+Shape 区分内建值、命名标量、slice、struct、pointer 和 any；ByteSlice 决定字节专用传输接口。
 这些信息集中规划，输出器不自行决定类型关系。alias 重新导出同一个 Python 类型。
 命名标量是独立的 int/float/str 子类，不能当成无名类型丢弃其身份。
 
 `planFunction` 决定函数和参数名：`Snake` 处理连续缩写、大小写边界，`avoidKeyword`
 给关键字加 `_`；无名和 `_` 参数按原位置变成 arg1、arg2。数字留在词内，如 Value2
 变成 value2。一个 `namespace` 检查包级名字，另一个检查每个函数的参数名。冲突报出
-双方来源；当前保留 _native、__all__、Ref、Slice、Ptr。
+双方来源；当前保留 _native、__all__、Ref、Slice、Ptr。any 节点占用 GoAny 名字；
+`planAny` 规划全部具体类型的转换，基础转换函数参加同一包级名字冲突检查。
 
 `memberName` 统一字段/方法名字：桥接保留成员加 `_`，例如 Value → value_；命名标量
 还避开其 Python 内建基类成员，例如 Go string 方法 Join → join_，保留 str.join。
@@ -145,6 +149,11 @@ Type.Go 明确调用原 API 时的类型。新资源类型须先定义其所有�
 
 `abi.Slice` 单独描述具体 slice 的元素类型和批量/索引操作符号，Go/C++ 输出器共享
 这份计划。它与包级函数 Operation 分工不同，不将缓冲区操作伪装成目标包函数。
+
+`pyapi.AnyConversion` 保存转换类型及公开名字，`abi.AnyConversion` 保存装箱、
+断言符号和带 ok 字段的结果结构。普通和 try 断言共用一个 ABI 操作，转换不计入
+业务 Operation，也不要求对应对象 Class。转换引用的命名类型参与 `planImports`，
+即使目标包没有导出函数也不能漏掉命名标量所需的 import。
 
 `abi.Class` 记录具体类型的构造、复制、取地址、load/store、显式转换和字段操作；不存在
 的操作用空符号表示。`abi.Field` 绑定已规划的公开选择器与传输类型。`planImports` 为

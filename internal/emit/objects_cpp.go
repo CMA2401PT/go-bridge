@@ -86,6 +86,9 @@ func cppZeroValue(t *abi.Type) string {
 
 func cppClass(b *strings.Builder, c *abi.Class) {
 	t, cls := c.Type, classVar(c.Type)
+	if t.Python.Shape == pyapi.AnyObject {
+		cppNilMembers(b, t, "Go any values")
+	}
 	if t.Python.Shape == pyapi.StructObject {
 		cppStructConstructor(b, c)
 	}
@@ -166,13 +169,8 @@ func cppValueConstructor(b *strings.Builder, c *abi.Class) {
 
 func cppPointerAccess(b *strings.Builder, c *abi.Class) {
 	t, cls := c.Type, classVar(c.Type)
-	fmt.Fprintf(b, `%[1]s.def_static("nil", [] { return %[2]s(0); });
-%[1]s.def_property_readonly("is_nil", [](py::handle self) { return handle_arg<%[2]s>(self) == 0; });
-%[1]s.def("__bool__", [](py::handle self) -> bool {
-    checked_ref<%[2]s>(self);
-    throw py::type_error("Go pointers have no truth value; use is_nil");
-});
-%[1]s.def_property("value", [=](py::handle self) -> py::object {
+	cppNilMembers(b, t, "Go pointers")
+	fmt.Fprintf(b, `%[1]s.def_property("value", [=](py::handle self) -> py::object {
     auto input = handle_arg<%[2]s>(self);
 `, cls, t.Cpp)
 	cppOwnedCall(b, c.Elem, c.Load+"(input)")
@@ -183,4 +181,16 @@ func cppField(b *strings.Builder, c *abi.Class, f *abi.Field) {
 	fmt.Fprintf(b, "%s.def_property(%q, [=](py::handle self) -> py::object {\nauto input = %s(self);\n", classVar(c.Type), f.Python.Name, cppInput(c.Type))
 	cppOwnedCall(b, f.Type, f.Get+"(input)")
 	fmt.Fprintf(b, "}, [=](py::handle self, py::handle value) {\nauto input = %s(self);\nauto v = %s(value);\n%s(input, v);\n});\n", cppInput(c.Type), cppInput(f.Type), f.Set)
+}
+
+// cppNilMembers binds handle 0 as nil for pointers and any. Truth testing is
+// rejected so a nil check is never confused with a zero or empty value.
+func cppNilMembers(b *strings.Builder, t *abi.Type, what string) {
+	fmt.Fprintf(b, `%[1]s.def_static("nil", [] { return %[2]s(0); });
+%[1]s.def_property_readonly("is_nil", [](py::handle self) { return handle_arg<%[2]s>(self) == 0; });
+%[1]s.def("__bool__", [](py::handle self) -> bool {
+    checked_ref<%[2]s>(self);
+    throw py::type_error("%[3]s have no truth value; use is_nil");
+});
+`, classVar(t), t.Cpp, what)
 }

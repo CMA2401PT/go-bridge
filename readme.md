@@ -26,7 +26,7 @@ C ABI；pybind11 扩展再调用该 ABI，并向 Python 暴露 CPython 原生扩
 
 ## 当前阶段：根据样例实现生成器
 
-生成器已覆盖 examples 01–09，并完成原生编译、行为与类型声明验收。完整路线、阶段状态与支持范围见
+生成器已覆盖 examples 01–10，并完成原生编译、行为与类型声明验收。完整路线、阶段状态与支持范围见
 [`docs/generator-plan.md`](docs/generator-plan.md)，模块边界见
 [`docs/generator-architecture.md`](docs/generator-architecture.md)。每个可验证阶段单独提交。
 
@@ -60,8 +60,10 @@ clone 与批量复制。生成调用不捕获 Go panic：未恢复的 panic（�
 终止整个 Python 进程，不能用 Python `try/except` 捕获。详见[运行时契约](docs/generator-runtime.md)。
 
 已支持命名标量与 slice、struct 构造/字段/提升字段/方法、普通/多级/命名指针，以及
-同类包装的 typed nil。生成器原生测试覆盖 examples 01–09，行为细节见
-[对象协议](docs/generator-objects.md)。any/interface（含 error）、map、channel、数组、
+同类包装的 typed nil。any/interface{} 使用 GoAny 显式装箱和断言，支持 any 字段、
+`*any` 与 `[]any`；未知动态类型可持有和传回。生成器原生测试覆盖 examples 01–10，
+行为细节见[对象协议](docs/generator-objects.md)和[any 协议](docs/generator-any.md)。
+命名／带方法 interface（含 error）、map、channel、数组、
 泛型、可变参数、函数值、导出变量/常量及 named bool 仍明确拒绝。
 
 从仓库根目录运行：
@@ -108,7 +110,7 @@ GO_BRIDGE_PYTHON=python go test ./internal/generate -run TestIntegration -v
 GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIntegration -v
 ```
 
-集成测试从生成产物编译和调用，不依赖 `expected/`；包括 01–09 与独立临时 module、跨包类型、组合资源与 panic 子进程。
+集成测试从生成产物编译和调用，不依赖 `expected/`；包括 01–10 与独立临时 module、跨包类型、组合资源与 panic 子进程。
 消费者类型检查、holder race、原生 cgocheck2/checkptr 及未验证范围见[验收记录](docs/generator-acceptance.md)。
 未设置 `GO_BRIDGE_PYTHON` 时，常规 Go 测试会明确跳过原生编译集成测试。
 

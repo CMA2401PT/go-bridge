@@ -37,6 +37,9 @@ func bridgeInput(value C.BrString) string {
 func goSource(p *abi.Package) string {
 	var b strings.Builder
 	b.WriteString(adapterPrelude)
+	for _, c := range p.AnyConversions {
+		fmt.Fprintf(&b, "typedef struct { uint8_t ok; %s value; } %s;\n", c.Type.C, c.Result)
+	}
 	for _, op := range p.Operations {
 		if len(op.Results) == 0 {
 			continue
@@ -64,6 +67,9 @@ func goSource(p *abi.Package) string {
 	}
 	for _, c := range p.Classes {
 		goClass(&b, c)
+	}
+	for _, c := range p.AnyConversions {
+		goAnyConversion(&b, c)
 	}
 	b.WriteString("\nfunc main() {}\n")
 	return b.String()
@@ -108,6 +114,8 @@ func goInput(t *abi.Type, value string) string {
 	switch t.Kind {
 	case abi.Handle:
 		switch t.Python.Shape {
+		case pyapi.AnyObject:
+			return "bridgeAny(" + value + ")"
 		case pyapi.StructObject:
 			return "*bridgeGet[" + t.Cell + "](" + value + ")"
 		case pyapi.PointerObject:
@@ -133,6 +141,8 @@ func goOutput(b *strings.Builder, t *abi.Type, field, value string) {
 	switch t.Kind {
 	case abi.Handle:
 		switch t.Python.Shape {
+		case pyapi.AnyObject:
+			fmt.Fprintf(b, "%s = bridgePinAny(%s)\n", field, value)
 		case pyapi.StructObject:
 			fmt.Fprintf(b, "%s = bridgeStruct(%s)\n", field, value)
 		case pyapi.PointerObject:

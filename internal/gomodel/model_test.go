@@ -166,7 +166,8 @@ func TestSameNameInDifferentPackages(t *testing.T) {
 
 func TestUnsupportedHasContext(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
-		{`func Bad(v any) {}`, "parameter 1 (v): unsupported type interface{}"},
+		{`func Bad(v interface{ Read() int }) {}`, "parameter 1 (v): unsupported interface type"},
+		{`type Value interface{}`, "unsupported interface type"},
 		{`type Box struct { Data map[string]int }`, "field Data: unsupported type map[string]int"},
 		{`func Bad() error { return nil }`, "result 1"},
 		{`func Bad(v chan int) {}`, "unsupported type chan int"},
@@ -189,13 +190,40 @@ func TestUnsupportedHasContext(t *testing.T) {
 	}
 }
 
-func TestLoadExamples(t *testing.T) {
-	paths, err := filepath.Glob("../../examples/0*")
+func TestEmptyInterfaceIdentityAndComposition(t *testing.T) {
+	p, err := analyzeSource(t, `
+type Value = any
+type Box struct { Data interface{} }
+func Echo(value any, pointer *interface{}, values []any) interface{} { return value }
+func Hidden() any { return map[string]int{"answer": 42} }
+`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) != 9 {
-		t.Fatalf("expected 9 examples, got %d", len(paths))
+	function := p.Functions[0]
+	value := function.Params[0].Type
+	if value.Kind != Interface || function.Results[0].Type != value || function.Params[1].Type.Elem != value || function.Params[2].Type.Elem != value || named(p, "Box").Fields[0].Type != value {
+		t.Fatal("empty interfaces do not share one type node")
+	}
+	for _, declaration := range p.Declarations {
+		if declaration.Name == "Value" && (!declaration.Alias || declaration.Type != value) {
+			t.Fatal("any alias lost its identity")
+		}
+	}
+	for _, typ := range p.Types {
+		if _, ok := typ.Go.(*types.Map); ok {
+			t.Fatal("dynamic value expanded the static closure")
+		}
+	}
+}
+
+func TestLoadExamples(t *testing.T) {
+	paths, err := filepath.Glob("../../examples/[0-9][0-9]_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 10 {
+		t.Fatalf("expected 10 examples, got %d", len(paths))
 	}
 	for _, path := range paths {
 		t.Run(filepath.Base(path), func(t *testing.T) {
