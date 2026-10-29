@@ -18,6 +18,7 @@ const (
 	Basic     Kind = "basic"
 	Named     Kind = "named"
 	Slice     Kind = "slice"
+	Channel   Kind = "channel"
 	Pointer   Kind = "pointer"
 	Interface Kind = "interface"
 )
@@ -35,10 +36,11 @@ type Type struct {
 	Name        string // Basic and Named only
 	PackagePath string // Named only; empty for predeclared types
 
-	Underlying *Type       // Named non-struct only
-	Elem       *Type       // Slice or Pointer only
-	Fields     []Field     // Named struct only: direct exported fields
-	Selectable []Selection // Named struct only: visible direct and promoted fields
+	Underlying *Type         // Named non-struct only
+	Elem       *Type         // Slice, Pointer or Channel
+	Direction  types.ChanDir // Channel only
+	Fields     []Field       // Named struct only: direct exported fields
+	Selectable []Selection   // Named struct only: visible direct and promoted fields
 
 	// Method sets of T and *T, including promoted methods (Named only).
 	ValueMethods   []*Function

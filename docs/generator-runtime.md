@@ -60,8 +60,13 @@ Go init 中未恢复的 panic 会在 Python 导入过程中终止进程，仍不
 例如结果 `(非法 UTF-8, 第二个字符串)` 解码第一个就失败，第二个也由同一 owner 释放。
 这个约定不能改成“转换到哪个结果才开始拥有哪个结果”。
 
-生成代码不主动释放 GIL，输入 Python 对象及 UTF-8 缓存在同步调用期间有效。Go 会
-复制输入字符串后才调用原函数；原包不会因为保留 string 而持有 Python 内存。
+原 Go 函数/方法调用及 channel 收发释放 GIL，输入转换和结果转换持有 GIL。
+调用参数在同步调用期间保持存活，其 UTF-8 缓存也保持有效。Go 复制输入字符串后才
+调用原函数；原包不会因为保留 string 而持有 Python 内存。channel 回调在取得结果后
+回到调用线程执行，详见 [channel 协议](generator-channel.md)。
+
+释放 GIL 允许不同 Python 线程同时调用 Go API；共享 Go 对象的数据同步由调用者负责。
+内建字段、指针、slice 等短操作仍持有 GIL，但 GIL 不保证它们与正在执行的 Go 函数互斥。
 
 ## Go panic 直接终止宿主进程
 

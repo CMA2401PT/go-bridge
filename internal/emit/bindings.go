@@ -40,6 +40,9 @@ module.doc() = "Generated Go bindings";
 		cppRefClasses(&b)
 	}
 	cppClassTypes(&b, p)
+	for _, ch := range p.Channels {
+		cppChannel(&b, ch)
+	}
 	for _, s := range p.Slices {
 		cppSlice(&b, s)
 	}
@@ -81,9 +84,9 @@ func cppFunction(b *strings.Builder, op *abi.Operation) {
 	}
 	args := join(len(op.Params), func(i int) string { return fmt.Sprintf("v%d", i) })
 	if len(op.Results) == 0 {
-		fmt.Fprintf(b, "%s(%s);\n", op.Symbol, args)
+		fmt.Fprintf(b, "{ py::gil_scoped_release release; %s(%s); }\n", op.Symbol, args)
 	} else {
-		fmt.Fprintf(b, "Owned%s owned{%s(%s)};\nauto& result = owned.data;\n", op.Result, op.Symbol, args)
+		fmt.Fprintf(b, "Owned%s owned{[&] { py::gil_scoped_release release; return %s(%s); }()};\nauto& result = owned.data;\n", op.Result, op.Symbol, args)
 	}
 	switch len(op.Results) {
 	case 0:

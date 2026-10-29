@@ -12,6 +12,13 @@ import (
 func complete(g *gomodel.Package) error {
 	for i := 0; i < len(g.Types); i++ {
 		t := g.Types[i]
+		if t.Kind == gomodel.Channel && t.Direction == types.SendRecv {
+			for _, direction := range []types.ChanDir{types.SendOnly, types.RecvOnly} {
+				if _, err := g.Ensure(types.NewChan(direction, t.Elem.Go), "bridge channel direction of "+t.String()); err != nil {
+					return err
+				}
+			}
+		}
 		if t.Kind != gomodel.Named {
 			continue
 		}

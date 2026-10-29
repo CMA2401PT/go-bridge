@@ -6,8 +6,8 @@
 
 namespace py = pybind11;
 
-// The GIL stays held. Python arguments and their UTF-8 caches remain alive
-// until Go has copied them. No Python buffer is retained by Go.
+// Conversion holds the GIL. Call arguments keep their UTF-8 caches alive
+// while the Go call releases it; Go copies strings before retaining them.
 inline BrString string_arg(py::handle value) {
     if (!PyUnicode_Check(value.ptr())) throw py::type_error("expected str");
     Py_ssize_t size;

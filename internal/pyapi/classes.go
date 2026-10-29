@@ -18,6 +18,7 @@ const (
 	StructObject  Shape = "struct"
 	PointerObject Shape = "pointer"
 	AnyObject     Shape = "any"
+	ChannelObject Shape = "channel"
 )
 
 // Field contains a visible Go selector and its single shared Python spelling.
@@ -34,6 +35,8 @@ func shape(t *gomodel.Type) Shape {
 		return Builtin
 	case gomodel.Slice:
 		return SliceObject
+	case gomodel.Channel:
+		return ChannelObject
 	case gomodel.Pointer:
 		return PointerObject
 	case gomodel.Interface:
@@ -47,6 +50,8 @@ func shape(t *gomodel.Type) Shape {
 			return NamedValue
 		case gomodel.Slice:
 			return SliceObject
+		case gomodel.Channel:
+			return ChannelObject
 		case gomodel.Pointer:
 			return PointerObject
 		}
@@ -64,6 +69,14 @@ func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
 			base = base.Underlying
 		}
 		t.Elem = mapped[base.Elem]
+		if t.Shape == ChannelObject {
+			t.CanSend = base.Direction != types.RecvOnly
+			t.CanRecv = base.Direction != types.SendOnly
+			if base.Direction == types.SendRecv {
+				t.SendOnly = mapped[p.Go.Find(types.NewChan(types.SendOnly, base.Elem.Go))]
+				t.RecvOnly = mapped[p.Go.Find(types.NewChan(types.RecvOnly, base.Elem.Go))]
+			}
+		}
 		t.ByteSlice = t.Shape == SliceObject && t.Elem.Go.Go == types.Typ[types.Uint8]
 		t.Pointer = mapped[p.Go.Find(types.NewPointer(t.Go.Go))]
 	}
@@ -87,7 +100,7 @@ func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
 		switch t.Shape {
 		case StructObject:
 			methods = t.Go.PointerMethods
-		case NamedValue, SliceObject:
+		case NamedValue, SliceObject, ChannelObject:
 			methods = t.Go.ValueMethods
 		case PointerObject:
 			if t.Go.Kind == gomodel.Pointer {
@@ -122,6 +135,7 @@ func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
 var bridgeMembers = map[string]bool{
 	"value": true, "is_nil": true, "nil": true, "from_value": true, "addr": true, "ptr": true,
 	"clone": true, "copy_to_py_list": true, "copy_to_py_bytes": true, "unname": true,
+	"send": true, "recv": true, "close": true, "send_only": true, "recv_only": true,
 	"as_any": true, "from_any": true, "try_from_any": true,
 }
 
@@ -141,6 +155,17 @@ func className(t *gomodel.Type) (string, error) {
 	}
 	if t.Kind == gomodel.Named {
 		return avoidKeyword(t.Name), nil
+	}
+	if t.Kind == gomodel.Channel {
+		elem, err := typeStem(t.Elem)
+		prefix := "Chan"
+		if t.Direction == types.SendOnly {
+			prefix = "SendChan"
+		}
+		if t.Direction == types.RecvOnly {
+			prefix = "RecvChan"
+		}
+		return prefix + elem, err
 	}
 	if t.Kind == gomodel.Pointer {
 		elem, err := typeStem(t.Elem)

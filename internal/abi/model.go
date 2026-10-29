@@ -58,6 +58,7 @@ type Package struct {
 	Python         *pyapi.Package
 	Operations     []*Operation
 	Slices         []*Slice
+	Channels       []*Channel
 	Types          []*Type
 	Classes        []*Class
 	Imports        []Import
@@ -92,6 +93,9 @@ func Plan(p *pyapi.Package) (*Package, error) {
 	}
 	for _, t := range p.Types {
 		w := wire[t]
+		if t.Shape == pyapi.ChannelObject {
+			result.Channels = append(result.Channels, planChannel(t, wire))
+		}
 		if t.Shape == pyapi.SliceObject {
 			prefix := fmt.Sprintf("BrType%d", t.Go.ID)
 			sl := &Slice{Type: w, Elem: wire[t.Elem], Len: prefix + "Len", At: prefix + "At", Set: prefix + "Set", Reslice: prefix + "Reslice", Clone: prefix + "Clone", Copy: prefix + "Copy"}

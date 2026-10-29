@@ -86,7 +86,7 @@ workspace 和 replace 规则继续生效；`package` 决定 Python 包名和库�
 
 ## 当前边界与后续设计
 
-目前完整链路覆盖基础值、alias、Ref、slice、named、struct、方法与指针/typed nil。
+目前完整链路覆盖基础值、alias、Ref、slice、named、struct、方法与指针/typed nil、any 和 channel。
 Go/ABI/Python 的对象操作分工见[对象协议](generator-objects.md)。
 
 包装类放在 C++，通过 pybind11 暴露；命名标量在 C++ 模块初始化时创建内建类型子类。

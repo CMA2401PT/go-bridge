@@ -51,10 +51,13 @@ class Ptr(Ref, _typing.Generic[_Target]):
 			base = fmt.Sprintf("Ptr[%q]", annotation(t.Elem))
 		}
 		fmt.Fprintf(b, "@_typing.final\nclass %s(%s):\n", t.Name, base)
-		if t.Shape == pyapi.AnyObject {
+		if t.Shape == pyapi.AnyObject || t.Shape == pyapi.ChannelObject {
 			b.WriteString("    @_builtins.classmethod\n    def nil(cls) -> _typing.Self: ...\n    @_builtins.property\n    def is_nil(self) -> _builtins.bool: ...\n    def __bool__(self) -> _typing.Never: ...\n")
 		} else {
 			stubConstructor(b, t)
+		}
+		if t.Shape == pyapi.ChannelObject {
+			stubChannel(b, t)
 		}
 		if c := conversions[t]; c != nil {
 			fmt.Fprintf(b, "    def %[1]s(self) -> %[4]s: ...\n    @_builtins.classmethod\n    def %[2]s(cls, value: %[4]s) -> _typing.Self: ...\n    @_builtins.classmethod\n    def %[3]s(cls, value: %[4]s) -> _typing.Self | None: ...\n", c.Box, c.Assert, c.TryAssert, p.Any.Name)

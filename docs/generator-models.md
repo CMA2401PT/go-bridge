@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | Basic | `Name`、`Go` | int、string |
 | Slice | `Elem` | `[]int` 指向 int 节点 |
+| Channel | `Elem`、`Direction` | `chan T`、`chan<- T`、`<-chan T` |
 | Pointer | `Elem` | `**int` 指向 `*int` 节点 |
 | Interface | `Go`，无静态动态类型依赖 | any、interface{} |
 | Named，底层非 struct | `Name`、`PackagePath`、`Underlying`、方法集 | `type Count int` 指向 int 节点 |
@@ -99,7 +100,7 @@ Python 表示；将来解决该映射时，也必须移除此处的限制。
 生成代码使用公开字段名访问，不写出包外无法访问的私有嵌入路径。
 
 `Package.Ensure` 允许后续阶段用同一类型身份索引加入依赖；它只收集 Go 事实。
-`pyapi.complete` 定义桥接补全政策：仅命名 struct 自动加入 *T，不扩展无限指针链。
+`pyapi.complete` 定义桥接补全政策：命名 struct 自动加入 *T，双向 channel 加入两个方向类型，不扩展无限指针链。
 补全会原地扩展传入的模型，重复补全不会改变模型；Type.Origin 保存首次引入节点的
 依赖路径，包含 API 来源或 bridge addr 来源。ptr() 的存在取决于补全后的闭包中是否
 存在 *T，不区分其来源。这一模型准备工作本身不代表新类型后端已通过验收。
@@ -114,7 +115,7 @@ Python 表示；将来解决该映射时，也必须移除此处的限制。
 
 `className` 保留 named 类型名字，并为无名 slice/pointer 递归生成名字。
 `planClasses` 记录 Shape、Elem、Underlying、Pointer、可见字段、构造字段和选定的方法集。
-Shape 区分内建值、命名标量、slice、struct、pointer 和 any；ByteSlice 决定字节专用传输接口。
+Shape 区分内建值、命名标量、slice、struct、pointer、channel 和 any；ByteSlice 决定字节专用传输接口。
 这些信息集中规划，输出器不自行决定类型关系。alias 重新导出同一个 Python 类型。
 命名标量是独立的 int/float/str 子类，不能当成无名类型丢弃其身份。
 
@@ -149,6 +150,9 @@ Type.Go 明确调用原 API 时的类型。新资源类型须先定义其所有�
 
 `abi.Slice` 单独描述具体 slice 的元素类型和批量/索引操作符号，Go/C++ 输出器共享
 这份计划。它与包级函数 Operation 分工不同，不将缓冲区操作伪装成目标包函数。
+
+`abi.Channel` 独立规划构造、收发、关闭和方向转换。接收返回 ok 与元素值，
+Python callback 留在 C++，不作为 ABI 参数。详见 [channel 协议](generator-channel.md)。
 
 `pyapi.AnyConversion` 保存转换类型及公开名字，`abi.AnyConversion` 保存装箱、
 断言符号和带 ok 字段的结果结构。普通和 try 断言共用一个 ABI 操作，转换不计入

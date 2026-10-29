@@ -1,6 +1,6 @@
 # 生成器实施计划
 
-状态：M0–M7 已实现并通过本机验收，范围覆盖 examples 01–10。每完成一个可验证的阶段单独提交，下面的状态随代码更新。
+状态：M0–M8 已实现并通过本机验收，范围覆盖 examples 01–11。每完成一个可验证的阶段单独提交，下面的状态随代码更新。
 
 当前实现的分工、模型和关键代码路径见[维护文档导航](README.md)。实施计划负责记录
 目标与阶段进度；已实现机制的细节统一放在主题文档中。
@@ -11,7 +11,7 @@
 适配层、pybind11 C++ 绑定、Python package 和 `.pyi`。生成代码不要求逐字匹配
 `examples/expected/`，但复制、共享、类型检查和生命周期行为必须有测试依据。
 
-当前支持范围是 examples 01–10：
+当前支持范围是 examples 01–11：
 
 - bool、整数、浮点数、string；多返回值。
 - slice（含 bytes、嵌套 slice）、命名标量与命名 slice。
@@ -19,8 +19,9 @@
 - 普通指针、多级指针、命名指针、递归类型。
 - 带类型 nil；Go panic 不由桥接层恢复，未恢复的 panic 直接终止宿主进程。
 - any/interface{} 的显式装箱与断言、any 字段及 `*any`／`[]any` 组合。
+- channel 的三种方向、命名类型、同步 Python 接收回调和对象组合。
 
-暂不支持命名／带方法 interface（含 error）、map、channel、数组、函数值/callback、泛型
+暂不支持命名／带方法 interface（含 error）、map、数组、函数值/callback、泛型
 和可变参数。包级变量、常量的导出另行设计，不沿用旧 gen 的变量导出接口。
 命名 bool 的 Python 表示尚未定义（bool 不能被继承），暂时明确拒绝。
 基础 bool 正常支持。complex、unsafe.Pointer 不在首版范围。
@@ -146,7 +147,7 @@ M3 使用 runtime/cgo.Handle 管理不透明整数句柄，未复用手写样例
 - [x] 资源管理涉及部分使用 cgocheck2/checkptr/race 进行针对性验证。
 - [x] 文档清楚区分已实现能力、已知限制与后续目标。
 
-验收命令、覆盖矩阵与未验证环境见 [01–10 验收](generator-acceptance.md)。
+验收命令、覆盖矩阵与未验证环境见 [01–11 验收](generator-acceptance.md)。
 
 ### M7：any 装箱与类型断言
 
@@ -158,6 +159,17 @@ M3 使用 runtime/cgo.Handle 管理不透明整数句柄，未复用手写样例
 - [x] 验证转换名字冲突、消费者类型收窄、失败清理、致命 panic 和并发句柄释放。
 
 具体模型、语义与实现路径见 [any 协议](generator-any.md)。
+
+### M8：channel 与同步接收回调
+
+- [x] 从手写 11_channel 验证缓冲与无缓冲收发、关闭、nil、方向和回调线程。
+- [x] Go 模型保留元素与方向，Python 规划补齐双向 channel 的两个方向类型。
+- [x] 独立 ABI 操作规划及 Go/C++/stub 输出，复用已有元素转换和所有权协议。
+- [x] 支持命名、递归 channel，以及字段、指针、slice、any 组合。
+- [x] 收发及原 Go 函数/方法调用释放 GIL，回调异常原样传播。
+- [x] 原生行为、消费者类型检查、句柄释放与 channel panic 子进程验证。
+
+具体语义与实现路径见 [channel 协议](generator-channel.md)。
 
 ## 工作与提交约定
 

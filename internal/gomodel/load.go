@@ -137,6 +137,9 @@ func (b *builder) visit(t types.Type, where string) (*Type, error) {
 	case *types.Slice:
 		n.Kind = Slice
 		n.Elem, err = b.visit(t.Elem(), where+" -> slice element")
+	case *types.Chan:
+		n.Kind, n.Direction = Channel, t.Dir()
+		n.Elem, err = b.visit(t.Elem(), where+" -> channel element")
 	case *types.Interface:
 		if !t.Complete().Empty() {
 			return nil, fmt.Errorf("%s: unsupported interface type %s", where, t)
