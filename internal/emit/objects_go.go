@@ -87,7 +87,7 @@ func goPointerAccess(b *strings.Builder, c *abi.Class) {
 	fmt.Fprintf(b, "pointer := %s\n", goInput(t, "handle"))
 	if e.Python.Shape == pyapi.StructObject {
 		// Loading *p must panic on nil even though a view only stores p.
-		fmt.Fprintf(b, "if pointer == nil {panic(\"nil pointer dereference\")}\nout = bridgePin((%s)(pointer))\n", e.Cell)
+		fmt.Fprintf(b, "_ = *pointer\nout = bridgePin((%s)(pointer))\n", e.Cell)
 	} else {
 		b.WriteString("value := *pointer\n")
 		goOutput(b, e, "out", "value")

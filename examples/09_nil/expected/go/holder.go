@@ -29,9 +29,11 @@ func Pin[T any](value T) C.uintptr_t {
 }
 
 func UnPin(address C.uintptr_t) {
-	if entry, ok := holders.LoadAndDelete(address); ok {
-		entry.(*runtime.Pinner).Unpin()
+	if address == 0 {
+		return
 	}
+	entry, _ := holders.LoadAndDelete(address)
+	entry.(*runtime.Pinner).Unpin()
 }
 
 // Handle 0 is the zero value of T and is never pinned; for a pointer T it is

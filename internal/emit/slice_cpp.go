@@ -87,7 +87,7 @@ func cppSliceCopy(b *strings.Builder, s *abi.Slice, cls string) {
     const auto& self = checked_ref<%s>(object);
     size_t size = %s(self.handle);
     OwnedBuffer<%s, %s> owned(size);
-    %s(self.handle, owned.values.data(), size);
+    %s(self.handle, owned.values.data());
     py::list output(size);
     for (size_t i = 0; i < size; ++i) output[i] = %s;
     return output;
@@ -99,7 +99,7 @@ func cppSliceCopy(b *strings.Builder, s *abi.Slice, cls string) {
     size_t size = %s(self.handle);
     auto output = py::reinterpret_steal<py::bytes>(PyBytes_FromStringAndSize(nullptr, static_cast<Py_ssize_t>(size)));
     if (!output) throw py::error_already_set();
-    %s(self.handle, reinterpret_cast<%s*>(PyBytes_AS_STRING(output.ptr())), size);
+    %s(self.handle, reinterpret_cast<%s*>(PyBytes_AS_STRING(output.ptr())));
     return output;
 });
 `, cls, t.Cpp, s.Len, s.Copy, e.C)

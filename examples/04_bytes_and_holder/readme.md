@@ -70,8 +70,7 @@ Go GC 管理，本例不递归 pin，也不让 C++ 读取它们。UnPin 只解�
 这是一套绑定内部的地址协议。Get[T] 必须使用由 Pin[T] 创建、尚未 UnPin 的
 句柄，且 T 必须准确匹配。它不做类型断言或失效句柄检查。不能把未知地址、过期
 地址或错误类型交给 Get。释放后的地址可能被 Go 分配器复用，因此调用者不得
-保存并再次使用旧句柄；UnPin 对不存在的表项不操作，但不承诺旧地址被复用后
-重复释放仍然安全。
+保存并再次使用旧句柄。UnPin 必须且只能对每个有效句柄调用一次。
 
 当前每次 Pin 对应一个 Ref。若未来要为同一个对象产生多个独立包装对象，应分别
 Pin 或另行定义共享持有策略，不能直接复制原句柄的释放责任。对于 pointer 类型，
@@ -85,18 +84,18 @@ Python 绑定保持 GIL，传入对象在整个调用期间存活，保证 Get �
 
 | 操作 | ABI | 行为 |
 | --- | --- | --- |
-| 构造 SliceBytes | BrNewBytes(外部地址, 长度) → uintptr_t | C.GoBytes 复制到 Go，再 Pin |
+| 构造 SliceBytes | BrNewBytes(外部地址, 长度) → uintptr_t | 复制字节到 Go，再 Pin |
 | 调用 Go 函数 | BrEchoBytes(uintptr_t) → uintptr_t | Get[[]byte]、调用原函数、Pin 返回值 |
 | 查询长度 | BrBytesLen(uintptr_t) → size_t | Go 读取切片长度 |
-| 显式复制 | BrCopyBytes(句柄, Python 缓冲区, 长度) | Go 同步填充新的 Python bytes |
+| 显式复制 | BrCopyBytes(句柄, Python 缓冲区) | Go 同步填充新的 Python bytes |
 | 通知释放 | BrUnPin(uintptr_t) | 通用 UnPin，与 bytes 类型无关 |
 
 每个原始 Go []byte 参数/返回值对应一个句柄。构造和复制是专用传输辅助函数，
-带外部缓冲区和长度。C++ Ref 内部只有句柄，不保存 Go 数组地址或长度，也不再
+借用外部缓冲区；构造传入长度，复制的长度由 Go slice 决定。C++ Ref 内部只有句柄，不保存 Go 数组地址或长度，也不再
 使用 BrBuffer。字符和任意二进制数据都可保留，包括空值和内嵌 NUL。
 
-C.GoBytes 的输入长度受 C.int 范围限制。复制时只借用 Python 新分配且尚未发布
-的缓冲区，Go 不保存这个地址。返回值在显式复制前都保存在 Go 中；原始函数内部
+C++ 按 slice 长度分配复制缓冲区，内部 ABI 信任这一约定。复制时只借用尚未发布
+的 Python 缓冲区，Go 不保存这个地址。返回值在显式复制前都保存在 Go 中；原始函数内部
 可能分配和复制，不能据此宣称整个操作零拷贝。nil 切片与空切片在 Python API 中
 均表现为长度 0。
 
@@ -104,8 +103,7 @@ C.GoBytes 的输入长度受 C.int 范围限制。复制时只借用 Python 新�
 
 Python 测试覆盖 Ref 继承、空值与二进制数据、强制 Go GC 后读取、输入先析构、
 复制结果独立存活、别名和异常退出时的释放、参数类型及公开接口范围。
-Go 测试覆盖通用结构体及其引用、nil、独立句柄的并发操作和传输
-缓冲区检查。`_native._holder_count` 与 `_collect_go` 仅供测试，不是公共接口。
+Go 测试覆盖通用结构体及其引用、nil 和独立句柄的并发操作。`_native._holder_count` 与 `_collect_go` 仅供测试，不是公共接口。
 
 检查地址转换可以运行：
 
@@ -115,4 +113,5 @@ GOEXPERIMENT=cgocheck2 go test -race -gcflags=all=-d=checkptr=2 ./examples/04_by
 go vet ./examples/04_bytes_and_holder/expected/go
 ```
 
-一般 Go panic、error 映射和将 Go 数据地址直接交给外部长期读取留待后续案例。
+未恢复的 Go panic 直接终止 Python 进程。error 映射和将 Go 数据地址直接交给外部
+长期读取留待后续案例。

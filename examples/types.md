@@ -3,8 +3,8 @@
 本文汇总 01–11 已确认的 Go → Python 类型规则，是各案例 readme 的索引与上位约定。
 具体 ABI、测试与限制见对应案例。本文描述手写样例；当前生成器的契约见
 [实施计划](../docs/generator-plan.md)与[运行时协议](../docs/generator-runtime.md)。
-特别是下文的 GoPanic/recover 仅描述 09 的历史实现：生成器已取消恢复，未恢复的 Go
-panic（包括 nil 解引用）会终止整个 Python 进程。
+样例与生成器均不恢复 Go panic；未恢复的 panic（包括 nil 解引用）会终止整个
+Python 进程。
 10 使用当前句柄和 panic 协议验证 any 映射；生成器已支持本例及 `*any`、`[]any` 组合。
 
 ## Go 类型分类
@@ -164,12 +164,12 @@ panic（包括 nil 解引用）会终止整个 Python 进程。
   `__bool__` 抛 `TypeError`，提示使用 `is_nil`，避免 `if p:` 对 nil 也为真。
 - **出现位置**：参数、返回值、`.value`（目标是指针时）与指针字段都可以是 nil，
   类型标注仍是 `T`，不写 `T | None`。与 Go 一样，类型系统不区分可空与非空。
-- **解引用 nil**：`.value`、struct 指针的字段读写与值接收者方法需要目标，抛
-  `GoPanic`；Go 在同样的位置也会 panic。`ptr()` 与 `from_value(q)` 复制的是指针
+- **解引用 nil**：`.value`、struct 指针的字段读写与值接收者方法需要目标；
+  解引用 nil 会触发 Go panic 并终止进程。`ptr()` 与 `from_value(q)` 复制的是指针
   本身，nil 也可以。
 - **nil 接收者**：指针接收者方法原样交给 Go，Go 方法可以自行处理 nil。
-- **panic**：每个导出函数由适配层 `recover`，把 panic 消息返回给 C++，抛
-  `GoPanic(RuntimeError)`，不会让进程崩溃。已 Pin 的参数不受影响。
+- **panic**：适配层直接调用 Go，不传输 panic 状态或消息。未恢复的 panic 终止
+  整个 Python 进程，Python 不捕获它。
 - slice 包装的 Python API 暂不区分 nil 与空 slice，没有 `is_nil`；内部保留 Go 的
   nil 状态，any 装箱与取出也不会丢失它（10）。
 

@@ -76,9 +76,9 @@ Go 的三下标形式或 `cap()`。Go 没有步长，`s[::k]`（k ≠ 1）抛 `V
 | 操作 | ABI | 行为 |
 | --- | --- | --- |
 | `SliceInt(values)` | `BrNewSliceInt(intptr_t 数组, 长度) → uintptr_t` | C++ 先逐项转换到临时数组，Go 复制到新 `[]int` 再 Pin |
-| `SliceInt.copy_to_py_list()` | `BrCopySliceInt(句柄, 缓冲区, 长度)` | Go 按值填充 C++ 缓冲区，C++ 再建 list |
+| `SliceInt.copy_to_py_list()` | `BrCopySliceInt(句柄, 缓冲区)` | Go 按值填充 C++ 缓冲区，C++ 再建 list |
 | `SliceSliceInt(values)` | `BrNewSliceSliceInt(uintptr_t 句柄数组, 长度) → uintptr_t` | Go 对每个句柄 `Get[[]int]`，组成新 `[][]int` 再 Pin |
-| `SliceSliceInt.copy_to_py_list()` | `BrSliceSliceIntItems(句柄, 句柄缓冲区, 长度)` | Go 对每个元素分别 Pin，C++ 各包装为新的 `SliceInt` |
+| `SliceSliceInt.copy_to_py_list()` | `BrSliceSliceIntItems(句柄, 句柄缓冲区)` | Go 对每个元素分别 Pin，C++ 各包装为新的 `SliceInt` |
 | `len()` | `Br<类型>Len(句柄) → size_t` | Go 读取长度 |
 
 **值元素**：Python int 与 Go int 之间只复制值，ABI 元素类型沿用 01_basic 的
@@ -129,8 +129,8 @@ C++ 包装对象也不持有 Python 对象，因此不存在跨边界的引用�
   C++ 临时缓冲区只在调用期间借给 Go，Go 不保存其地址。
 - 所有 slice 的内存都由 Go GC 管理，Ref 析构只调用通用的 `BrUnPin`。
 - nil 与空 slice 在 Python 中都表现为长度 0；从 Python 构造的空 slice 是非 nil 的。
-- 外部缓冲区为空指针但长度非零、长度超出 Go int 能表达的元素数、或句柄为 0 时，
-  Go 返回 0 或错误码，C++ 抛出 `ValueError`。
+- C++ 检查 Python 索引与元素类型，并按 Go slice 长度分配复制缓冲区。
+  Go 内部 ABI 信任这些输入，直接执行读写，不重复校验或返回错误码。
 - 当前假设 Go int 与 `intptr_t` 等宽，即 01_basic 的平台假设。
 
 ## 验证
@@ -139,7 +139,7 @@ Python 测试覆盖极值与生成器构造、强制 Go GC 后读取、元素 Re
 重复元素、append 共享剩余容量、下标读写与越界、切片边界与步长拒绝、切片与
 clone 的共享关系、不可迭代、类层次与泛型下标、元素和参数类型拒绝，以及迭代
 中途抛出异常时的释放。每个测试结束时检查 holder 数量回到基线。`test.py` 可通过
-`mypy --strict` 检查。Go 测试覆盖输入复制、append 语义、元素读写、重新切片、浅拷贝、元素存活和非法缓冲区与下标。
+`mypy --strict` 检查。Go 测试覆盖输入复制、append 语义、元素读写、重新切片、浅拷贝、元素存活。
 
 ```sh
 GOEXPERIMENT=cgocheck2 python examples/build.py 05_slice --test

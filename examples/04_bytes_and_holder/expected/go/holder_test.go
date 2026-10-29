@@ -37,8 +37,6 @@ func TestNilValue(t *testing.T) {
 		t.Fatal("nil value changed")
 	}
 	UnPin(id)
-	UnPin(id) // No intervening allocation; this is a missing entry, not a new Ref.
-	UnPin(0)
 	if holderCount() != 0 {
 		t.Fatal("pin leaked")
 	}
@@ -62,19 +60,5 @@ func TestConcurrentIndependentRefs(t *testing.T) {
 	group.Wait()
 	if holderCount() != 0 {
 		t.Fatal("pin leaked")
-	}
-}
-
-func TestInvalidInputBuffer(t *testing.T) {
-	if BrNewBytes(nil, 1) != 0 {
-		t.Fatal("invalid external input accepted")
-	}
-	id := BrNewBytes(nil, 0)
-	defer BrUnPin(id)
-	if id == 0 || BrBytesLen(id) != 0 || BrCopyBytes(id, nil, 0) != 0 {
-		t.Fatal("empty slice rejected")
-	}
-	if BrCopyBytes(id, nil, 1) == 0 {
-		t.Fatal("invalid copy buffer accepted")
 	}
 }

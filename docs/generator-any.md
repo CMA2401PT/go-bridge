@@ -18,8 +18,8 @@ def try_any_as_int(value: GoAny) -> int | None: ...
 
 bool、各宽度整数、uintptr、float32/float64、string 均提供相同形式。
 byte/rune 的 alias 使用 uint8/int32，不创造新的动态类型。其他已映射具体类型
-提供 as_any、from_any、try_from_any；包括命名标量、slice、struct 和 pointer。
-GoAny 自身不提供这组三个转换。any 参数只接收已初始化的 GoAny，不自动装箱。
+提供 as_any、from_any、try_from_any；包括命名标量、slice、struct、pointer 和 channel。
+GoAny 自身不提供这组三个转换。any 参数只接收 GoAny，不自动装箱。
 
 转换执行具体 Go 类型断言，不执行 Go 类型转换。MyInt 与 int、命名 slice 与
 底层 slice、命名 pointer 与底层 pointer、T 与 *T 都不能相互断言。
@@ -33,8 +33,9 @@ GoAny 自身不提供这组三个转换。any 参数只接收已初始化的 GoA
 
 GoAny.nil() 使用句柄 0，is_nil 为真；没有公开构造函数，bool 判断抛 TypeError。
 非 nil interface 直接交给 cgo.NewHandle 保存，读取直接使用 Handle.Value()。
-没有 anyCell，也不在 Go 侧额外验证 any 句柄类别；Python 入口负责包装类型和
-初始化状态检查。any 的运行时输出到 go/any.go，通用 holder 继续负责生命周期。
+没有 anyCell，也不在 Go 侧额外验证 any 句柄类别；Python 入口检查包装类型。
+调用者通过公开接口构造完整对象。any 的运行时输出到 go/any.go，通用 holder 继续
+负责生命周期。
 
 装有 typed nil 的 interface 本身非 nil，因此使用非零句柄。断言成功取出 nil
 pointer 时，pointer 的 ABI 值为 0；独立 ok 字段区分成功与断言失败。
@@ -48,6 +49,7 @@ nil slice 同样保留动态类型和 nil 状态，slice 包装仍不提供 is_n
 | slice／命名 slice | 复制头，共享数组；装箱恢复名字，取出后归一化 Cell |
 | struct T | 装箱复制 T，取出创建独立的可寻址变量；复制为浅复制 |
 | pointer／命名 pointer | 复制指针，共享目标；装箱恢复名字 |
+| channel／命名 channel | 共享 channel，保留方向和命名类型身份 |
 
 struct 的内部 Cell 是 *T，不能直接装箱该 Cell；必须装箱解引用后的 T。
 any 字段 getter 复制当次 interface 值，setter 复制传入值。替换原字段不会改变

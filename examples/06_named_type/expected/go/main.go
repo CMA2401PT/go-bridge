@@ -14,7 +14,6 @@ import "C"
 
 import (
 	api "go-bridge/examples/06_named_type"
-	"math"
 	"runtime"
 	"slices"
 	"unsafe"
@@ -28,17 +27,6 @@ func cString(value string) C.BrString {
 // ---------------------------------------------------------------------------
 // []int, as in 05_slice.
 
-// validBuffer checks an external buffer of size elements of type E.
-func validBuffer[E any](data unsafe.Pointer, size C.size_t) bool {
-	var element E
-	limit := uint64(math.MaxInt) / uint64(unsafe.Sizeof(element))
-	return uint64(size) <= limit && (data != nil || size == 0)
-}
-
-func inRange[E any](value []E, index C.size_t) bool {
-	return uint64(index) < uint64(len(value))
-}
-
 func clone[E any](id C.uintptr_t) C.uintptr_t {
 	return Pin(slices.Clone(Get[[]E](id)))
 }
@@ -46,17 +34,11 @@ func clone[E any](id C.uintptr_t) C.uintptr_t {
 // reslice is Go's value[low:high]; it shares the backing array.
 func reslice[E any](id C.uintptr_t, low, high C.size_t) C.uintptr_t {
 	value := Get[[]E](id)
-	if low > high || uint64(high) > uint64(len(value)) {
-		return 0
-	}
 	return Pin(value[low:high])
 }
 
 //export BrNewSliceInt
 func BrNewSliceInt(data unsafe.Pointer, size C.size_t) C.uintptr_t {
-	if !validBuffer[int](data, size) {
-		return 0
-	}
 	value := make([]int, int(size))
 	copy(value, unsafe.Slice((*int)(data), int(size)))
 	return Pin(value)
@@ -68,33 +50,20 @@ func BrSliceIntLen(id C.uintptr_t) C.size_t {
 }
 
 //export BrCopySliceInt
-func BrCopySliceInt(id C.uintptr_t, data unsafe.Pointer, size C.size_t) C.int {
+func BrCopySliceInt(id C.uintptr_t, data unsafe.Pointer) {
 	value := Get[[]int](id)
-	if uint64(size) != uint64(len(value)) || !validBuffer[int](data, size) {
-		return 1
-	}
 	copy(unsafe.Slice((*int)(data), len(value)), value)
-	return 0
 }
 
 //export BrSliceIntAt
-func BrSliceIntAt(id C.uintptr_t, index C.size_t, out unsafe.Pointer) C.int {
-	value := Get[[]int](id)
-	if !inRange(value, index) || out == nil {
-		return 1
-	}
-	*(*int)(out) = value[index]
-	return 0
+func BrSliceIntAt(id C.uintptr_t, index C.size_t) C.intptr_t {
+	return C.intptr_t(Get[[]int](id)[index])
 }
 
 //export BrSliceIntSet
-func BrSliceIntSet(id C.uintptr_t, index C.size_t, item C.intptr_t) C.int {
+func BrSliceIntSet(id C.uintptr_t, index C.size_t, item C.intptr_t) {
 	value := Get[[]int](id)
-	if !inRange(value, index) {
-		return 1
-	}
 	value[index] = int(item)
-	return 0
 }
 
 //export BrSliceIntClone

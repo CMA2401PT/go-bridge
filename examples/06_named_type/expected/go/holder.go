@@ -29,9 +29,8 @@ func Pin[T any](value T) C.uintptr_t {
 }
 
 func UnPin(address C.uintptr_t) {
-	if entry, ok := holders.LoadAndDelete(address); ok {
-		entry.(*runtime.Pinner).Unpin()
-	}
+	entry, _ := holders.LoadAndDelete(address)
+	entry.(*runtime.Pinner).Unpin()
 }
 
 // The caller must own a live Ref created by Pin[P], where P and T have

@@ -8,15 +8,10 @@ import (
 )
 
 // Ensure adds a type and its Go dependencies using the same identity index as
-// Analyze. After an error the package must be discarded; subsequent Ensure
-// calls return the original error. Callers choose bridge policy; this method only records Go facts.
+// Analyze. After an error the caller must discard the package. Callers
+// choose bridge policy; this method only records Go facts.
 func (p *Package) Ensure(t types.Type, where string) (*Type, error) {
-	if p.err != nil {
-		return nil, p.err
-	}
-	node, err := (&builder{model: p}).visit(t, where)
-	p.err = err
-	return node, err
+	return (&builder{model: p}).visit(t, where)
 }
 
 // selections collects visible fields, including those promoted through hidden

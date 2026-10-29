@@ -13,14 +13,9 @@ struct Slice : Ref { using Ref::Ref; };
 struct Ptr : Ref { using Ref::Ref; };
 template<int ID, typename Base> struct GoObject : Base { using Base::Base; };
 
-// Check the actual holder before casting: pybind11 can otherwise allocate raw,
-// uninitialized C++ storage for an object created by a direct __new__ call.
-// Select this type's slot, also for Python classes with multiple native bases.
+// Python inputs must have the matching concrete Go wrapper type.
 template<typename T> const T& checked_ref(py::handle value) {
     if (!py::isinstance<T>(value)) throw py::type_error("expected the matching Go wrapper type");
-    auto* instance = reinterpret_cast<py::detail::instance*>(value.ptr());
-    auto holder = instance->get_value_and_holder(py::detail::get_type_info(typeid(T)));
-    if (!holder.holder_constructed()) throw py::type_error("Go wrapper has not been initialized");
     return py::cast<const T&>(value);
 }
 template<typename T> uintptr_t handle_arg(py::handle value) {

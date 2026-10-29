@@ -14,7 +14,6 @@ import "C"
 
 import (
 	api "go-bridge/examples/07_ptr_basic"
-	"math"
 	"runtime"
 	"unsafe"
 )
@@ -94,17 +93,8 @@ func BrPtrMyNamedNonStructIntInc(id C.uintptr_t) { Get[*api.MyNamedNonStructInt]
 // length and a bulk copy. MyNamedNonStructSliceInt has the same layout and
 // reuses these exports.
 
-func validBuffer[E any](data unsafe.Pointer, size C.size_t) bool {
-	var element E
-	limit := uint64(math.MaxInt) / uint64(unsafe.Sizeof(element))
-	return uint64(size) <= limit && (data != nil || size == 0)
-}
-
 //export BrNewSliceInt
 func BrNewSliceInt(data unsafe.Pointer, size C.size_t) C.uintptr_t {
-	if !validBuffer[int](data, size) {
-		return 0
-	}
 	value := make([]int, int(size))
 	copy(value, unsafe.Slice((*int)(data), int(size)))
 	return Pin(value)
@@ -116,13 +106,9 @@ func BrSliceIntLen(id C.uintptr_t) C.size_t {
 }
 
 //export BrCopySliceInt
-func BrCopySliceInt(id C.uintptr_t, data unsafe.Pointer, size C.size_t) C.int {
+func BrCopySliceInt(id C.uintptr_t, data unsafe.Pointer) {
 	value := Get[[]int](id)
-	if uint64(size) != uint64(len(value)) || !validBuffer[int](data, size) {
-		return 1
-	}
 	copy(unsafe.Slice((*int)(data), len(value)), value)
-	return 0
 }
 
 // Go's MyNamedNonStructSliceInt(s) and []int(si), as in 06.

@@ -189,10 +189,10 @@ bridge.Count.from_any(3)  # type: ignore[arg-type]
 		}
 	}
 	for _, call := range []string{"bridge.PtrGoAny.nil().value", "bridge.read_hidden(bridge.GoAny.nil())"} {
-		cmd := exec.Command(python, "-c", setup+"print('before fatal call', flush=True)\ntry:\n    "+call+"\nexcept BaseException:\n    print('caught in Python', flush=True)\n")
+		cmd := exec.Command(python, "-c", setup+"print('before fatal call', flush=True)\n"+call+"\n")
 		cmd.Env = append(os.Environ(), "GOTRACEBACK=single")
 		output, err := cmd.CombinedOutput()
-		if _, ok := err.(*exec.ExitError); !ok || !bytes.Contains(output, []byte("before fatal call")) || !bytes.Contains(output, []byte("panic:")) || bytes.Contains(output, []byte("caught in Python")) {
+		if _, ok := err.(*exec.ExitError); !ok || !bytes.Contains(output, []byte("before fatal call")) || !bytes.Contains(output, []byte("panic:")) {
 			t.Fatalf("Go panic was not fatal: %v\n%s", err, output)
 		}
 	}

@@ -81,7 +81,7 @@ def try_from_any(cls, value: GoAny) -> Self | None: ...
 - `any_as_*()`／`T.from_any()`：不匹配时抛 `TypeError`。
 - `try_any_as_*()`／`T.try_from_any()`：不匹配时返回 `None`，失败不创建句柄。
 - 匹配时返回转换后的值；`0`、`False`、空字符串和带类型 nil 都是成功结果。
-- 两种形式都拒绝不属于 GoAny 的参数，包括 Python `None` 和未初始化的包装。
+- 两种形式都拒绝不属于 GoAny 的参数，包括 Python `None`。
 - `try` 只处理类型断言失败。成功断言为 string 后的 UTF-8 解码错误仍抛
   `UnicodeDecodeError`；它不捕获 Python 转换异常，也不恢复 Go panic。
 
@@ -165,7 +165,8 @@ anyCell 包装。装箱前恢复原 Go 类型，取出后再转为既有 Cell：
 Cell 是 `[]int`，装箱须先还原 MySlice；IntPtr 的 Cell 是 `*int`，装箱须先还原
 IntPtr。any 内部不能剥去命名类型身份。
 
-Python 入口检查参数是否为已初始化的 GoAny；Go 侧不额外检查 any 句柄的类别。
+Python 入口检查参数是否为 GoAny；调用者通过公开接口构造对象。Go 侧不额外检查
+any 句柄的类别。
 
 输入句柄借用；每次成功装箱、非 nil any 返回、非 nil 对象取出均创建独立句柄。
 GoAny 不借用来源 Ref 的句柄，来源释放后仍有效；取出的对象也能在 GoAny 释放后
@@ -198,7 +199,7 @@ try_from_any。对象适配层负责具体类型恢复和归一化，holder 只�
 
 Python 测试覆盖全部基础类型及整数边界、动态类型不互认、命名类型身份、struct
 双向复制、slice／指针共享、多级和命名指针、nil interface、各类带类型 nil、
-nil slice 状态、any 字段快照、未知动态类型、显式装箱要求、未初始化包装、
+nil slice 状态、any 字段快照、未知动态类型、显式装箱要求、
 失败无分配、源／结果独立生命周期、Go 环、解码异常以及子进程中的 Go panic。
 静态检查验证 try 结果的类型收窄。Go 测试直接检查句柄保存的动态值、命名类型恢复和
 归一化、struct 副本、nil 的 ok 字段及句柄释放。

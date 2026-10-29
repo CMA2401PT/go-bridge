@@ -13,9 +13,7 @@ class Ref {
     uintptr_t id_;
 
 protected:
-    explicit Ref(uintptr_t id) : id_(id) {
-        if (!id_) throw py::value_error("cannot create Go Ref");
-    }
+    explicit Ref(uintptr_t id) : id_(id) {}
     uintptr_t handle() const { return id_; }
 
 public:
@@ -37,15 +35,10 @@ public:
     size_t size() const { return BrBytesLen(handle()); }
     py::bytes copy_to_py_bytes() const {
         const auto length = size();
-        if (length > static_cast<size_t>(PY_SSIZE_T_MAX)) {
-            throw py::value_error("slice is too large for Python bytes");
-        }
         PyObject* raw = PyBytes_FromStringAndSize(nullptr, static_cast<Py_ssize_t>(length));
         if (!raw) throw py::error_already_set();
         auto result = py::reinterpret_steal<py::bytes>(raw);
-        if (BrCopyBytes(handle(), PyBytes_AS_STRING(raw), length) != 0) {
-            throw py::value_error("cannot copy Go bytes");
-        }
+        BrCopyBytes(handle(), PyBytes_AS_STRING(raw));
         return result;
     }
     SliceBytes echo() const { return SliceBytes(BrEchoBytes(handle())); }

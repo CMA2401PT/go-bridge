@@ -48,11 +48,11 @@ GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/... -count=1
 
 桥接层不恢复 Go panic；显式 panic、nil 解引用、内部句柄断言失败均可终止进程。
 致命行为在独立 Python 子进程验证，断言执行前标记、Go panic 输出、非零退出，
-并确认没有进入 Python `except BaseException` 或正常返回路径。目标 Go 代码自己
+并确认调用没有正常返回。子进程直接执行致命调用，不尝试捕获 panic。目标 Go 代码自己
 写的 recover 仍有效。Python 输入转换错误和 C++ 资源清理遵循
 [运行时契约](generator-runtime.md)。
 
-与历史样例的差异包括：整数越界为 OverflowError；09 不再抛 GoPanic；struct
+与历史样例的差异包括：整数越界为 OverflowError；struct
 构造省略字段得到 Go 零值，显式 None 不替代零值；保留成员名加下划线；具体包装类
 禁止 Python 子类化。slice 不可隐式迭代，复制到 Python 要显式调用批量方法。
 

@@ -98,7 +98,6 @@ type Package struct {
 	Functions    []*Function
 	Sizes        types.Sizes
 
-	err   error        // first failed extension; discard this package after an error
 	index typeutil.Map // types.Type -> *Type, keyed by types.Identical
 }
 

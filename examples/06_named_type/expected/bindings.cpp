@@ -17,9 +17,7 @@ class Ref {
     uintptr_t id_;
 
 protected:
-    explicit Ref(uintptr_t id) : id_(id) {
-        if (!id_) throw py::value_error("cannot create Go Ref");
-    }
+    explicit Ref(uintptr_t id) : id_(id) {}
 
 public:
     Ref(const Ref&) = delete;
@@ -35,12 +33,6 @@ public:
 // Go string results, as in 03_str: decode strictly, then free the C copy.
 py::str py_string(BrString output) {
     std::unique_ptr<char, decltype(&std::free)> owned(output.data, &std::free);
-    if (!owned) {
-        throw py::value_error("cannot convert Go string");
-    }
-    if (output.size > static_cast<size_t>(PY_SSIZE_T_MAX)) {
-        throw py::value_error("Go string is too large for Python");
-    }
     PyObject* decoded = PyUnicode_DecodeUTF8(
         owned.get(), static_cast<Py_ssize_t>(output.size), "strict");
     if (!decoded) throw py::error_already_set();
@@ -151,17 +143,11 @@ protected:
 public:
     size_t size() const override { return BrSliceIntLen(handle()); }
     intptr_t get(py::ssize_t index) const {
-        intptr_t value = 0;
-        if (BrSliceIntAt(handle(), element_index(index), &value) != 0) {
-            throw py::index_error("slice index out of range");
-        }
-        return value;
+        return BrSliceIntAt(handle(), element_index(index));
     }
     void set(py::ssize_t index, py::handle value) {
         const auto position = element_index(index);
-        if (BrSliceIntSet(handle(), position, go_int(value)) != 0) {
-            throw py::index_error("slice index out of range");
-        }
+        BrSliceIntSet(handle(), position, go_int(value));
     }
     Self reslice(const py::slice& range) const {
         const auto [low, high] = bounds(range);
@@ -170,9 +156,7 @@ public:
     Self clone() const { return Self(BrSliceIntClone(handle())); }
     py::list copy_to_py_list() const {
         std::vector<intptr_t> data(size());
-        if (BrCopySliceInt(handle(), data.data(), data.size()) != 0) {
-            throw py::value_error("cannot copy Go slice");
-        }
+        BrCopySliceInt(handle(), data.data());
         py::list result;
         for (intptr_t value : data) result.append(value);
         return result;

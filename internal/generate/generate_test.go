@@ -182,11 +182,7 @@ func Recovered() (result int) {
 			script := setup + `assert not hasattr(b, "GoPanic")
 assert b.recovered() == 7
 print("before call", flush=True)
-try:
-    ` + tc.call + `
-except BaseException:
-    print("caught in Python", flush=True)
-    sys.exit(77)
+` + tc.call + `
 print("returned to Python", flush=True)
 sys.exit(78)
 `
@@ -201,10 +197,8 @@ sys.exit(78)
 					t.Errorf("missing %q:\n%s", want, output)
 				}
 			}
-			for _, unwanted := range []string{"caught in Python", "returned to Python"} {
-				if bytes.Contains(output, []byte(unwanted)) {
-					t.Errorf("panic did not terminate process:\n%s", output)
-				}
+			if bytes.Contains(output, []byte("returned to Python")) {
+				t.Errorf("panic did not terminate process:\n%s", output)
 			}
 		})
 	}
@@ -248,10 +242,7 @@ func init() { panic("target init") }`)
 	out := buildProject(t, python, source, "init_panic")
 	script := "import sys\nsys.path.insert(0, " + pythonLiteral(filepath.Join(out, ".build/python")) + ")\n" + `
 print("before import", flush=True)
-try:
-    import init_panic
-except BaseException:
-    print("caught in Python", flush=True)
+import init_panic
 print("after import", flush=True)
 `
 	cmd := exec.Command(python, "-c", script)
@@ -260,7 +251,6 @@ print("after import", flush=True)
 	if _, ok := err.(*exec.ExitError); !ok ||
 		!bytes.Contains(output, []byte("before import")) ||
 		!bytes.Contains(output, []byte("panic: target init")) ||
-		bytes.Contains(output, []byte("caught in Python")) ||
 		bytes.Contains(output, []byte("after import")) {
 		t.Fatalf("expected fatal Go initialization during import: %v\n%s", err, output)
 	}

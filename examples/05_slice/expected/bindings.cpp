@@ -14,9 +14,7 @@ class Ref {
     uintptr_t id_;
 
 protected:
-    explicit Ref(uintptr_t id) : id_(id) {
-        if (!id_) throw py::value_error("cannot create Go Ref");
-    }
+    explicit Ref(uintptr_t id) : id_(id) {}
 
 public:
     Ref(const Ref&) = delete;
@@ -80,17 +78,11 @@ public:
 
     size_t size() const override { return BrSliceIntLen(handle()); }
     intptr_t get(py::ssize_t index) const {
-        intptr_t value = 0;
-        if (BrSliceIntAt(handle(), element_index(index), &value) != 0) {
-            throw py::index_error("slice index out of range");
-        }
-        return value;
+        return BrSliceIntAt(handle(), element_index(index));
     }
     void set(py::ssize_t index, py::handle value) {
         const auto position = element_index(index);
-        if (BrSliceIntSet(handle(), position, go_int(value)) != 0) {
-            throw py::index_error("slice index out of range");
-        }
+        BrSliceIntSet(handle(), position, go_int(value));
     }
     SliceInt reslice(const py::slice& range) const {
         const auto [low, high] = bounds(range);
@@ -99,9 +91,7 @@ public:
     SliceInt clone() const { return SliceInt(BrSliceIntClone(handle())); }
     py::list copy_to_py_list() const {
         std::vector<intptr_t> data(size());
-        if (BrCopySliceInt(handle(), data.data(), data.size()) != 0) {
-            throw py::value_error("cannot copy Go slice");
-        }
+        BrCopySliceInt(handle(), data.data());
         py::list result;
         for (intptr_t value : data) result.append(value);
         return result;
@@ -135,9 +125,7 @@ public:
         return SliceInt(BrSliceSliceIntAt(handle(), element_index(index)));
     }
     void set(py::ssize_t index, const SliceInt& value) {
-        if (BrSliceSliceIntSet(handle(), element_index(index), value.handle()) != 0) {
-            throw py::index_error("slice index out of range");
-        }
+        BrSliceSliceIntSet(handle(), element_index(index), value.handle());
     }
     SliceSliceInt reslice(const py::slice& range) const {
         const auto [low, high] = bounds(range);
@@ -148,9 +136,7 @@ public:
         std::vector<uintptr_t> ids(size());
         std::vector<SliceInt> elements;
         elements.reserve(ids.size());
-        if (BrSliceSliceIntItems(handle(), ids.data(), ids.size()) != 0) {
-            throw py::value_error("cannot copy Go slice");
-        }
+        BrSliceSliceIntItems(handle(), ids.data());
         // Take ownership of every new handle before any Python allocation.
         for (uintptr_t id : ids) elements.emplace_back(id);
         py::list result;

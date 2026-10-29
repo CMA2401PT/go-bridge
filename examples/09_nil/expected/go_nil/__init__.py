@@ -1,7 +1,6 @@
 """Go nil pointers, nil receivers and panics."""
 
 from ._native import (
-    GoPanic,
     List,
     PtrInt,
     PtrList,
@@ -13,7 +12,6 @@ from ._native import (
 )
 
 __all__ = [
-    "GoPanic",
     "List",
     "PtrInt",
     "PtrList",

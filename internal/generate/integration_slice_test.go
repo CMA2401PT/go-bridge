@@ -62,12 +62,6 @@ assert b.Slice[int] is b.Slice
 try: type("Sub", (b.SliceInt,), {})
 except TypeError: pass
 else: raise AssertionError("concrete wrapper subclass accepted")
-uninitialized = b.SliceInt.__new__(b.SliceInt)
-for invalid in [lambda: b.concat_a(uninitialized, s), lambda: len(uninitialized), lambda: uninitialized.clone(), lambda: uninitialized[0], lambda: uninitialized.copy_to_py_list(), lambda: b.SliceSliceInt([uninitialized])]:
-    try: invalid()
-    except TypeError: pass
-    else: raise AssertionError("uninitialized wrapper accepted")
-del invalid, uninitialized
 
 before = b._native._holder_count()
 def broken():

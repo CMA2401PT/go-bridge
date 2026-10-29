@@ -105,7 +105,7 @@ C 边界覆盖来自原生扩展测试。它不代表任意目标 Go 包都不�
 
 `TestIntegrationWithoutFunctions` 实际构建只有 alias 和没有公开声明的包，使用延迟
 初始化写入文件来检查 import 返回前 Go init 已完成；`TestIntegrationPanicDuringImport`
-在独立 Python 子进程中验证 init panic 终止进程且无法被 try/except 捕获。
+在独立 Python 子进程中直接触发 init panic 并验证进程终止。
 
 按变更范围选择测试：纯命名改动先运行 pyapi/emit；改变传输或运行时语义必须跑原生
 集成测试；文档改动核对链接、关键符号和可执行命令。通过后只有出现新改动或疑点才

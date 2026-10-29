@@ -13,7 +13,6 @@ typedef struct {
 import "C"
 
 import (
-	"fmt"
 	api "go-bridge/examples/09_nil"
 	"runtime"
 )
@@ -21,16 +20,6 @@ import (
 // Go string results use the BrString ABI of 03_str; C++ frees data.
 func cString(value string) C.BrString {
 	return C.BrString{data: C.CString(value), size: C.size_t(len(value))}
-}
-
-// Every export that runs G code takes a panic out-parameter as its last
-// argument. guard recovers a panic, including a nil dereference, and hands
-// its message to C++, which raises GoPanic; the function then returns its
-// zero value, which C++ ignores. A panic must never unwind into C.
-func guard(panicked *C.BrString) {
-	if r := recover(); r != nil {
-		*panicked = cString(fmt.Sprint(r))
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -45,14 +34,12 @@ func BrNewPtrInt(value C.intptr_t) C.uintptr_t {
 }
 
 //export BrPtrIntLoad
-func BrPtrIntLoad(id C.uintptr_t, panicked *C.BrString) C.intptr_t {
-	defer guard(panicked)
+func BrPtrIntLoad(id C.uintptr_t) C.intptr_t {
 	return C.intptr_t(*Get[*int](id))
 }
 
 //export BrPtrIntStore
-func BrPtrIntStore(id C.uintptr_t, value C.intptr_t, panicked *C.BrString) {
-	defer guard(panicked)
+func BrPtrIntStore(id C.uintptr_t, value C.intptr_t) {
 	*Get[*int](id) = int(value)
 }
 
@@ -69,14 +56,12 @@ func BrNewList(value C.intptr_t, next C.uintptr_t) C.uintptr_t {
 }
 
 //export BrListGetValue
-func BrListGetValue(id C.uintptr_t, panicked *C.BrString) C.intptr_t {
-	defer guard(panicked)
+func BrListGetValue(id C.uintptr_t) C.intptr_t {
 	return C.intptr_t(Get[*api.List](id).Value)
 }
 
 //export BrListSetValue
-func BrListSetValue(id C.uintptr_t, value C.intptr_t, panicked *C.BrString) {
-	defer guard(panicked)
+func BrListSetValue(id C.uintptr_t, value C.intptr_t) {
 	Get[*api.List](id).Value = int(value)
 }
 
@@ -84,16 +69,14 @@ func BrListSetValue(id C.uintptr_t, value C.intptr_t, panicked *C.BrString) {
 // field: the list it points to is shared, and nil is handle 0.
 //
 //export BrListGetNext
-func BrListGetNext(id C.uintptr_t, panicked *C.BrString) C.uintptr_t {
-	defer guard(panicked)
+func BrListGetNext(id C.uintptr_t) C.uintptr_t {
 	return PinPointer(Get[*api.List](id).Next)
 }
 
 // Storing a pointer field copies the pointer, so the lists are shared.
 //
 //export BrListSetNext
-func BrListSetNext(id, next C.uintptr_t, panicked *C.BrString) {
-	defer guard(panicked)
+func BrListSetNext(id, next C.uintptr_t) {
 	Get[*api.List](id).Next = Get[*api.List](next)
 }
 
@@ -113,8 +96,7 @@ func BrListAddr(id C.uintptr_t) C.uintptr_t { return Pin(Get[*api.List](id)) }
 // Go's *p, read as the variable it names; dereferencing nil panics.
 //
 //export BrPtrListLoad
-func BrPtrListLoad(id C.uintptr_t, panicked *C.BrString) C.uintptr_t {
-	defer guard(panicked)
+func BrPtrListLoad(id C.uintptr_t) C.uintptr_t {
 	p := Get[*api.List](id)
 	_ = *p
 	return Pin(p)
@@ -123,36 +105,31 @@ func BrPtrListLoad(id C.uintptr_t, panicked *C.BrString) C.uintptr_t {
 // Go's *p = v: the struct is copied in.
 //
 //export BrPtrListStore
-func BrPtrListStore(id, value C.uintptr_t, panicked *C.BrString) {
-	defer guard(panicked)
+func BrPtrListStore(id, value C.uintptr_t) {
 	*Get[*api.List](id) = *Get[*api.List](value)
 }
 
 // Pointer receivers run on a nil *List; the method decides what nil means.
 //
 //export BrListLen
-func BrListLen(id C.uintptr_t, panicked *C.BrString) C.intptr_t {
-	defer guard(panicked)
+func BrListLen(id C.uintptr_t) C.intptr_t {
 	return C.intptr_t(Get[*api.List](id).Len())
 }
 
 //export BrListPush
-func BrListPush(id C.uintptr_t, v C.intptr_t, panicked *C.BrString) C.uintptr_t {
-	defer guard(panicked)
+func BrListPush(id C.uintptr_t, v C.intptr_t) C.uintptr_t {
 	return PinPointer(Get[*api.List](id).Push(int(v)))
 }
 
 //export BrListFirst
-func BrListFirst(id C.uintptr_t, panicked *C.BrString) C.intptr_t {
-	defer guard(panicked)
+func BrListFirst(id C.uintptr_t) C.intptr_t {
 	return C.intptr_t(Get[*api.List](id).First())
 }
 
 // A value receiver needs *l first, which panics on nil as in Go.
 //
 //export BrListHead
-func BrListHead(id C.uintptr_t, panicked *C.BrString) C.intptr_t {
-	defer guard(panicked)
+func BrListHead(id C.uintptr_t) C.intptr_t {
 	return C.intptr_t((*Get[*api.List](id)).Head())
 }
 
@@ -160,28 +137,24 @@ func BrListHead(id C.uintptr_t, panicked *C.BrString) C.intptr_t {
 // Functions.
 
 //export BrFind
-func BrFind(l C.uintptr_t, v C.intptr_t, panicked *C.BrString) C.uintptr_t {
-	defer guard(panicked)
+func BrFind(l C.uintptr_t, v C.intptr_t) C.uintptr_t {
 	return PinPointer(api.Find(Get[*api.List](l), int(v)))
 }
 
 //export BrDeref
-func BrDeref(p C.uintptr_t, panicked *C.BrString) C.BrString {
-	defer guard(panicked)
+func BrDeref(p C.uintptr_t) C.BrString {
 	return cString(api.Deref(Get[*int](p)))
 }
 
 // Go bool crosses as uint8_t, as in 01_basic.
 //
 //export BrMaybeInt
-func BrMaybeInt(ok C.uint8_t, panicked *C.BrString) C.uintptr_t {
-	defer guard(panicked)
+func BrMaybeInt(ok C.uint8_t) C.uintptr_t {
 	return PinPointer(api.MaybeInt(ok != 0))
 }
 
 //export BrMustPositive
-func BrMustPositive(v C.intptr_t, panicked *C.BrString) C.intptr_t {
-	defer guard(panicked)
+func BrMustPositive(v C.intptr_t) C.intptr_t {
 	return C.intptr_t(api.MustPositive(int(v)))
 }
 

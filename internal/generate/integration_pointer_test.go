@@ -129,11 +129,11 @@ assert b.must_positive(2)==2
 	}
 	for _, call := range []string{"b.must_positive(0)", "b.PtrInt.nil().value", "b.PtrList.nil().value", "b.PtrList.nil().value_", "b.PtrList.nil().head()", "b.PtrList.nil().first()", "setattr(b.PtrList.nil(), 'next', b.PtrList.nil())"} {
 		t.Run(call, func(t *testing.T) {
-			script := setup + "print('before fatal call',flush=True)\ntry:\n    " + call + "\nexcept BaseException:\n    print('caught in Python',flush=True)\nprint('returned',flush=True)\n"
+			script := setup + "print('before fatal call',flush=True)\n" + call + "\nprint('returned',flush=True)\n"
 			cmd := exec.Command(python, "-c", script)
 			cmd.Env = append(os.Environ(), "GOTRACEBACK=single")
 			output, err := cmd.CombinedOutput()
-			if _, ok := err.(*exec.ExitError); !ok || !bytes.Contains(output, []byte("before fatal call")) || !bytes.Contains(output, []byte("panic:")) || bytes.Contains(output, []byte("caught in Python")) || bytes.Contains(output, []byte("returned")) {
+			if _, ok := err.(*exec.ExitError); !ok || !bytes.Contains(output, []byte("before fatal call")) || !bytes.Contains(output, []byte("panic:")) || bytes.Contains(output, []byte("returned")) {
 				t.Fatalf("Go panic was not fatal: %v\n%s", err, output)
 			}
 		})

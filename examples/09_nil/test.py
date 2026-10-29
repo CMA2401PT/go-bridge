@@ -2,6 +2,7 @@ from pathlib import Path
 import gc
 import importlib
 import sys
+import subprocess
 import unittest
 
 
@@ -51,15 +52,6 @@ class NilPtrTests(Holders):
                 if value:
                     pass
 
-    def test_dereference_panics(self) -> None:
-        nil = bridge.PtrInt.nil()
-        with self.assertRaises(bridge.GoPanic) as raised:
-            nil.value
-        self.assertIsInstance(raised.exception, RuntimeError)
-        self.assertIn("nil pointer dereference", str(raised.exception))
-        with self.assertRaises(bridge.GoPanic):
-            nil.value = 1
-
     def test_nil_argument_and_result(self) -> None:
         self.assertEqual(bridge.deref(bridge.PtrInt.nil()), "nil")
         self.assertEqual(bridge.deref(bridge.PtrInt(7)), "7")
@@ -83,23 +75,6 @@ class NilListTests(Holders):
         self.assertFalse(one.is_nil)
         self.assertEqual(one.len(), 1)
         self.assertEqual(build(1, 2, 3).len(), 3)
-
-    def test_nil_receiver_that_dereferences(self) -> None:
-        empty = bridge.PtrList.nil()
-        with self.assertRaises(bridge.GoPanic):
-            empty.first()  # Go panics inside the method.
-        with self.assertRaises(bridge.GoPanic):
-            empty.head()  # Value receiver: *l panics before the call.
-        with self.assertRaises(bridge.GoPanic):
-            empty.value_
-        with self.assertRaises(bridge.GoPanic):
-            empty.next = bridge.PtrList.nil()
-        with self.assertRaises(bridge.GoPanic):
-            empty.value  # *p
-        with self.assertRaises(bridge.GoPanic):
-            empty.value = bridge.List()
-        self.assertEqual(build(4).first(), 4)
-        self.assertEqual(build(5).head(), 5)
 
     def test_value_is_never_nil(self) -> None:
         value = bridge.List(value_=1)
@@ -163,22 +138,33 @@ class NilListTests(Holders):
         self.assertEqual(self.holders(), 1)
 
 
-class PanicTests(Holders):
-    def test_panic_becomes_an_exception(self) -> None:
-        self.assertEqual(bridge.must_positive(1), 1)
-        with self.assertRaises(bridge.GoPanic) as raised:
-            bridge.must_positive(-3)
-        self.assertEqual(str(raised.exception), "not positive: -3")
-        # The process survives and later calls work.
-        self.assertEqual(bridge.must_positive(2), 2)
-
-    def test_repeated_panics_leak_nothing(self) -> None:
-        values = build(1)
-        for _ in range(100):
-            with self.assertRaises(bridge.GoPanic):
-                bridge.PtrList.nil().first()
-        self.assertEqual(values.len(), 1)
-        self.assertEqual(self.holders(), 1)
+class PanicTests(unittest.TestCase):
+    def test_go_panic_terminates_process(self) -> None:
+        setup = (
+            "import sys\n"
+            f"sys.path.insert(0, {str(example_dir.parent / '.build' / example_dir.name / 'python')!r})\n"
+            "import go_nil as bridge\n"
+        )
+        for call in [
+            "bridge.must_positive(-3)",
+            "bridge.PtrInt.nil().value",
+            "bridge.PtrInt.nil().value = 1",
+            "bridge.PtrList.nil().first()",
+            "bridge.PtrList.nil().head()",
+            "bridge.PtrList.nil().value_",
+            "bridge.PtrList.nil().value",
+            "bridge.PtrList.nil().next = bridge.PtrList.nil()",
+            "bridge.PtrList.nil().value = bridge.List()",
+        ]:
+            with self.subTest(call=call):
+                result = subprocess.run(
+                    args=[sys.executable, "-c", setup + call],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("panic:", result.stderr)
 
 
 if __name__ == "__main__":

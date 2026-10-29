@@ -364,18 +364,6 @@ class BoundaryTests(Holders):
         with self.assertRaises(TypeError):
             bridge.Ref(123)  # type: ignore[arg-type]
 
-    def test_uninitialized_wrappers_are_rejected(self) -> None:
-        any_value = bridge.GoAny.__new__(bridge.GoAny)  # type: ignore[call-arg]
-        with self.assertRaises(TypeError):
-            bridge.try_any_as_int(any_value)
-        with self.assertRaises(TypeError):
-            _ = any_value.is_nil
-        classes: list[Any] = [bridge.SliceInt, bridge.Point, bridge.PtrInt]
-        for cls in classes:
-            unfinished = cls.__new__(cls)
-            with self.assertRaises(TypeError):
-                unfinished.as_any()
-
     def test_failed_assertions_allocate_no_handles(self) -> None:
         boxed = bridge.int_as_any(1)
         self.assertEqual(self.holders(), 1)

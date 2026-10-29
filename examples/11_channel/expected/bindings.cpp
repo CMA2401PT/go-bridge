@@ -58,7 +58,6 @@ T float_arg(py::handle value) {
 }
 
 inline py::str decode(BrString value) {
-    if (value.size > static_cast<size_t>(PY_SSIZE_T_MAX)) throw py::value_error("Go string too large for Python");
     PyObject* result = PyUnicode_DecodeUTF8(value.data, static_cast<Py_ssize_t>(value.size), "strict");
     if (!result) throw py::error_already_set();
     return py::reinterpret_steal<py::str>(result);

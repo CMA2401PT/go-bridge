@@ -18,13 +18,13 @@ assert go_str.recv_and_return("你好\0world") == "Echo: 你好\0world"
 # def recv_and_return(value: str) -> str: ...
 ```
 
-## string：C.GoStringN 与 C.CString
+## string：复制输入与 C.CString 输出
 
 Python str 先由 C++ 转为 UTF-8，并包装为一个 `BrString`（指针与长度）。
 Go 导出函数的参数和返回值都是 `C.BrString`，所以一个 Go `string` 在函数
 签名中始终占一个参数或返回位置。输入结构体及其 UTF-8 缓冲区只在调用期间
-借用 Python 内存；Go 包裹层用 `C.GoStringN` 拷贝为 Go string。带长度的版本
-保留内嵌 `\0`，而 `C.GoString` 按 NUL 终止。
+借用 Python 内存；Go 包裹层用 unsafe.Slice 读取指定长度的字节并复制为 Go string。
+长度按字节计算，保留内嵌 `\0`。
 
 Go 返回时，`BrString` 结构体按值返回，只有字符数据由 `C.CString` 分配在 C 内存。
 C++ 包裹层按保存的长度严格解码为 Python str，然后释放字符数据。
@@ -46,5 +46,4 @@ Go 侧的 `goString` / `cString` 与 C++ 侧的 `c_string` / `py_string` 分别�
 函数绑定只负责连接这些转换与原始 API 调用。
 
 `test.py` 检查空字符串、普通文本、Unicode、内嵌 NUL、孤立代理字符和类型拒绝。
-当前输入长度受 `C.GoStringN` 的 `C.int` 范围限制，超长输入返回错误。一般 Go
-panic 和 `(T, error)` 的转换留给专门案例。
+内部 ABI 信任 C++ 提供的有效指针与长度。未恢复的 Go panic 直接终止 Python 进程。

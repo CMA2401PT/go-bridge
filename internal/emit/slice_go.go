@@ -44,10 +44,9 @@ func %[3]s(handle C.uintptr_t) C.uintptr_t {
     return bridgePin(append(value[:0:0], value...))
 }
 //export %[4]s
-func %[4]s(handle C.uintptr_t, data *C.%[5]s, size C.size_t) {
+func %[4]s(handle C.uintptr_t, data *C.%[5]s) {
     value := bridgeGet[%[2]s](handle)
-    if int(size) != len(value) { panic("slice copy length mismatch") }
-    output := unsafe.Slice(data, int(size))
+    output := unsafe.Slice(data, len(value))
     for i, v := range value {
 `, s.Reslice, t.Cell, s.Clone, s.Copy, e.C)
 	goOutput(b, e, "output[i]", "v")

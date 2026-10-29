@@ -8,17 +8,13 @@ import "C"
 
 import (
 	api "go-bridge/examples/04_bytes_and_holder"
-	"math"
 	"runtime"
 	"unsafe"
 )
 
 //export BrNewBytes
 func BrNewBytes(data unsafe.Pointer, size C.size_t) C.uintptr_t {
-	if uint64(size) > math.MaxInt32 || (data == nil && size != 0) {
-		return 0
-	}
-	return Pin(C.GoBytes(data, C.int(size)))
+	return Pin(append([]byte(nil), unsafe.Slice((*byte)(data), int(size))...))
 }
 
 //export BrEchoBytes
@@ -33,13 +29,9 @@ func BrBytesLen(id C.uintptr_t) C.size_t {
 }
 
 //export BrCopyBytes
-func BrCopyBytes(id C.uintptr_t, data unsafe.Pointer, size C.size_t) C.int {
+func BrCopyBytes(id C.uintptr_t, data unsafe.Pointer) {
 	value := Get[[]byte](id)
-	if uint64(size) != uint64(len(value)) || (data == nil && size != 0) {
-		return 1
-	}
 	copy(unsafe.Slice((*byte)(data), len(value)), value)
-	return 0
 }
 
 //export BrUnPin

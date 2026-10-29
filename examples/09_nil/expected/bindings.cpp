@@ -2,7 +2,6 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <utility>
 
 #include "libbridge.h"
@@ -32,21 +31,9 @@ public:
     bool is_nil() const { return id_ == 0; }
 };
 
-// Constructors that allocate must get a live handle back.
-uintptr_t allocated(uintptr_t id) {
-    if (!id) throw py::value_error("cannot create Go Ref");
-    return id;
-}
-
 // Go string results, as in 03_str: decode strictly, then free the C copy.
 py::str py_string(BrString output) {
     std::unique_ptr<char, decltype(&std::free)> owned(output.data, &std::free);
-    if (!owned) {
-        throw py::value_error("cannot convert Go string");
-    }
-    if (output.size > static_cast<size_t>(PY_SSIZE_T_MAX)) {
-        throw py::value_error("Go string is too large for Python");
-    }
     PyObject* decoded = PyUnicode_DecodeUTF8(
         owned.get(), static_cast<Py_ssize_t>(output.size), "strict");
     if (!decoded) throw py::error_already_set();
@@ -60,36 +47,6 @@ intptr_t go_int(py::handle item) {
         throw py::type_error("expected an int within Go int range");
     }
     return py::detail::cast_op<intptr_t>(element);
-}
-
-// ---------------------------------------------------------------------------
-// Go panics. Every guarded export takes a panic out-parameter; a non-empty
-// message becomes GoPanic, a RuntimeError subclass. The export's result is
-// then the Go zero value and is discarded (a zero handle owns nothing).
-
-py::handle go_panic;
-
-template <class Call>
-auto go_call(Call call) {
-    BrString panicked{nullptr, 0};
-    auto raise_if_panicked = [&panicked] {
-        if (!panicked.data) return;
-        const py::str message = py_string(panicked);
-        PyErr_SetObject(go_panic.ptr(), message.ptr());
-        throw py::error_already_set();
-    };
-    if constexpr (std::is_void_v<decltype(call(&panicked))>) {
-        call(&panicked);
-        raise_if_panicked();
-    } else {
-        auto result = call(&panicked);
-        if (panicked.data) {
-            // A string result is still owned C memory; free it before raising.
-            if constexpr (std::is_same_v<decltype(result), BrString>) std::free(result.data);
-            raise_if_panicked();
-        }
-        return result;
-    }
 }
 
 // Nil pointers have a type, as in Go, and so share the class of non-nil
@@ -113,7 +70,7 @@ const T& wrapper_arg(py::handle value, const char* expected) {
 }
 
 // ---------------------------------------------------------------------------
-// *int, as in 07. Dereferencing nil panics inside Go and becomes GoPanic.
+// *int, as in 07. Dereferencing nil panics inside Go and terminates the process.
 
 class PtrInt : public Ref {
 public:
@@ -121,15 +78,15 @@ public:
     PtrInt(PtrInt&&) noexcept = default;
 
     static PtrInt from_value(py::handle value) {
-        return PtrInt(allocated(BrNewPtrInt(go_int(value))));
+        return PtrInt(BrNewPtrInt(go_int(value)));
     }
 
     intptr_t value() const {
-        return go_call([&](BrString* p) { return BrPtrIntLoad(handle(), p); });
+        return BrPtrIntLoad(handle());
     }
     void set_value(py::handle value) {
         const auto v = go_int(value);
-        go_call([&](BrString* p) { BrPtrIntStore(handle(), v, p); });
+        BrPtrIntStore(handle(), v);
     }
 };
 
@@ -148,31 +105,31 @@ protected:
 
 public:
     intptr_t value() const {
-        return go_call([&](BrString* p) { return BrListGetValue(this->handle(), p); });
+        return BrListGetValue(this->handle());
     }
     void set_value(py::handle value) {
         const auto v = go_int(value);
-        go_call([&](BrString* p) { BrListSetValue(this->handle(), v, p); });
+        BrListSetValue(this->handle(), v);
     }
     // The pointer held in the field: may be nil, and shares the list.
     PtrList next() const;
     void set_next(py::handle value);
 
     intptr_t len() const {
-        return go_call([&](BrString* p) { return BrListLen(this->handle(), p); });
+        return BrListLen(this->handle());
     }
     PtrList push(py::handle v) const;
     intptr_t first() const {
-        return go_call([&](BrString* p) { return BrListFirst(this->handle(), p); });
+        return BrListFirst(this->handle());
     }
     intptr_t head() const {
-        return go_call([&](BrString* p) { return BrListHead(this->handle(), p); });
+        return BrListHead(this->handle());
     }
 };
 
 class List : public ListMembers<Ref> {
 public:
-    explicit List(uintptr_t id) : ListMembers(allocated(id)) {}
+    explicit List(uintptr_t id) : ListMembers(id) {}
     List(List&&) noexcept = default;
 
     static List create(py::handle value, py::handle next);
@@ -186,33 +143,33 @@ public:
 
     // Go's p := new(List); *p = v.
     static PtrList from_value(const List& value) {
-        return PtrList(allocated(BrListCopy(value.handle())));
+        return PtrList(BrListCopy(value.handle()));
     }
-    // Go's *p, a view of the variable; GoPanic on nil.
+    // Go's *p, a view of the variable; a Go panic on nil.
     List target() const {
-        return List(go_call([&](BrString* p) { return BrPtrListLoad(handle(), p); }));
+        return List(BrPtrListLoad(handle()));
     }
     void set_target(py::handle value) {
         const auto& source = wrapper_arg<List>(value, "List");
-        go_call([&](BrString* p) { BrPtrListStore(handle(), source.handle(), p); });
+        BrPtrListStore(handle(), source.handle());
     }
 };
 
 template <class Base>
 PtrList ListMembers<Base>::next() const {
-    return PtrList(go_call([&](BrString* p) { return BrListGetNext(this->handle(), p); }));
+    return PtrList(BrListGetNext(this->handle()));
 }
 
 template <class Base>
 void ListMembers<Base>::set_next(py::handle value) {
     const auto& tail = wrapper_arg<PtrList>(value, "PtrList");
-    go_call([&](BrString* p) { BrListSetNext(this->handle(), tail.handle(), p); });
+    BrListSetNext(this->handle(), tail.handle());
 }
 
 template <class Base>
 PtrList ListMembers<Base>::push(py::handle v) const {
     const auto item = go_int(v);
-    return PtrList(go_call([&](BrString* p) { return BrListPush(this->handle(), item, p); }));
+    return PtrList(BrListPush(this->handle(), item));
 }
 
 List List::create(py::handle value, py::handle next) {
@@ -222,7 +179,7 @@ List List::create(py::handle value, py::handle next) {
 }
 
 // Go's &v.
-PtrList List::addr() const { return PtrList(allocated(BrListAddr(handle()))); }
+PtrList List::addr() const { return PtrList(BrListAddr(handle())); }
 
 template <class Class>
 Class& def_list_members(Class& cls) {
@@ -242,30 +199,28 @@ Class& def_list_members(Class& cls) {
 
 PtrList find(const PtrList& l, py::handle v) {
     const auto item = go_int(v);
-    return PtrList(go_call([&](BrString* p) { return BrFind(l.handle(), item, p); }));
+    return PtrList(BrFind(l.handle(), item));
 }
 
 py::str deref(const PtrInt& p) {
-    return py_string(go_call([&](BrString* out) { return BrDeref(p.handle(), out); }));
+    return py_string(BrDeref(p.handle()));
 }
 
 PtrInt maybe_int(py::handle ok) {
     if (!PyBool_Check(ok.ptr())) throw py::type_error("expected a bool");
     const uint8_t value = ok.ptr() == Py_True ? 1 : 0;
-    return PtrInt(go_call([&](BrString* p) { return BrMaybeInt(value, p); }));
+    return PtrInt(BrMaybeInt(value));
 }
 
 intptr_t must_positive(py::handle v) {
     const auto value = go_int(v);
-    return go_call([&](BrString* p) { return BrMustPositive(value, p); });
+    return BrMustPositive(value);
 }
 
 }  // namespace
 
 PYBIND11_MODULE(_native, module) {
     module.doc() = "Go nil pointers, nil receivers and panics";
-    static py::exception<void> panic_type(module, "GoPanic", PyExc_RuntimeError);
-    go_panic = panic_type;
 
     py::class_<Ref>(module, "Ref");
     py::class_<PtrInt, Ref> ptr_int(module, "PtrInt");

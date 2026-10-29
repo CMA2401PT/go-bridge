@@ -63,7 +63,6 @@ T float_arg(py::handle value) {
 }
 
 inline py::str decode(BrString value) {
-    if (value.size > static_cast<size_t>(PY_SSIZE_T_MAX)) throw py::value_error("Go string too large for Python");
     PyObject* result = PyUnicode_DecodeUTF8(value.data, static_cast<Py_ssize_t>(value.size), "strict");
     if (!result) throw py::error_already_set();
     return py::reinterpret_steal<py::str>(result);
@@ -95,9 +94,6 @@ using IntPtr = GoObject<7, Ptr>;
 
 template<class T> const T& checked_ref(py::handle value) {
     if (!py::isinstance<T>(value)) throw py::type_error("expected the matching Go wrapper type");
-    auto* instance = reinterpret_cast<py::detail::instance*>(value.ptr());
-    auto holder = instance->get_value_and_holder(py::detail::get_type_info(typeid(T)));
-    if (!holder.holder_constructed()) throw py::type_error("Go wrapper has not been initialized");
     return py::cast<const T&>(value);
 }
 template<class T> uintptr_t handle_arg(py::handle value) { return checked_ref<T>(value).handle; }

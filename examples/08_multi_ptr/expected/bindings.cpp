@@ -16,9 +16,7 @@ class Ref {
     uintptr_t id_;
 
 protected:
-    explicit Ref(uintptr_t id) : id_(id) {
-        if (!id_) throw py::value_error("cannot create Go Ref");
-    }
+    explicit Ref(uintptr_t id) : id_(id) {}
 
 public:
     Ref(const Ref&) = delete;
@@ -34,12 +32,6 @@ public:
 // Go string results, as in 03_str: decode strictly, then free the C copy.
 py::str py_string(BrString output) {
     std::unique_ptr<char, decltype(&std::free)> owned(output.data, &std::free);
-    if (!owned) {
-        throw py::value_error("cannot convert Go string");
-    }
-    if (output.size > static_cast<size_t>(PY_SSIZE_T_MAX)) {
-        throw py::value_error("Go string is too large for Python");
-    }
     PyObject* decoded = PyUnicode_DecodeUTF8(
         owned.get(), static_cast<Py_ssize_t>(output.size), "strict");
     if (!decoded) throw py::error_already_set();

@@ -13,15 +13,12 @@ import "C"
 
 import (
 	api "go-bridge/examples/03_str"
-	"math"
+	"unsafe"
 )
 
-func goString(value C.BrString) (string, bool) {
-	if uint64(value.size) > math.MaxInt32 || (value.data == nil && value.size != 0) {
-		return "", false
-	}
-	// GoStringN copies the full UTF-8 input, including embedded NUL bytes.
-	return C.GoStringN(value.data, C.int(value.size)), true
+// Copy the borrowed UTF-8 bytes, including embedded NULs.
+func goString(value C.BrString) string {
+	return string(unsafe.Slice((*byte)(unsafe.Pointer(value.data)), int(value.size)))
 }
 
 func cString(value string) C.BrString {
@@ -30,10 +27,7 @@ func cString(value string) C.BrString {
 
 //export BrEchoString
 func BrEchoString(input C.BrString) C.BrString {
-	value, ok := goString(input)
-	if !ok {
-		return C.BrString{}
-	}
+	value := goString(input)
 	return cString(api.RecvAndReturn(value))
 }
 
