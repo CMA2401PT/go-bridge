@@ -1,6 +1,6 @@
 # 类型映射总览
 
-本文汇总 01–10 已确认的 Go → Python 类型规则，是各案例 readme 的索引与上位约定。
+本文汇总 01–11 已确认的 Go → Python 类型规则，是各案例 readme 的索引与上位约定。
 具体 ABI、测试与限制见对应案例。本文描述手写样例；当前生成器的契约见
 [实施计划](../docs/generator-plan.md)与[运行时协议](../docs/generator-runtime.md)。
 特别是下文的 GoPanic/recover 仅描述 09 的历史实现：生成器已取消恢复，未恢复的 Go
@@ -199,6 +199,15 @@ GoAny 保存一个不可直接修改的 interface 值，与 Python `typing.Any` 
   带方法／命名 interface 暂未覆盖。
 
 具体失败协议、ABI、字段和生命周期见 [10_any](10_any/readme.md)。
+
+## channel：同步回调接收
+
+`chan T`、`chan<- T`、`<-chan T` 分别映射为 ChanT、SendChanT、RecvChanT。
+包装持有同一个 Go channel；nil 用 handle 0 表示，释放包装不关闭 channel。
+`recv(callback) -> bool` 接收一个值后同步调用 Python 函数，关闭且读空后返回 False。
+阻塞收发与原 Go API 调用释放 GIL，回调在调用线程持有 GIL 时执行。双向 channel
+通过 send_only/recv_only 显式转换方向；单向类只提供方向允许的操作。
+具体语义、ABI、线程与关闭责任见 [11_channel](11_channel/readme.md)。
 
 ## 方法集
 
