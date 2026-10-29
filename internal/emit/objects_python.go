@@ -51,7 +51,7 @@ class Ptr(Ref, _typing.Generic[_Target]):
 			base = fmt.Sprintf("Ptr[%q]", annotation(t.Elem))
 		}
 		fmt.Fprintf(b, "@_typing.final\nclass %s(%s):\n", t.Name, base)
-		if t.Shape == pyapi.AnyObject || t.Shape == pyapi.ChannelObject {
+		if t.Shape == pyapi.AnyObject || t.Shape == pyapi.ChannelObject || t.Shape == pyapi.CallableObject {
 			b.WriteString("    @_builtins.classmethod\n    def nil(cls) -> _typing.Self: ...\n    @_builtins.property\n    def is_nil(self) -> _builtins.bool: ...\n    def __bool__(self) -> _typing.Never: ...\n")
 		} else if t.Shape == pyapi.ArrayObject {
 			stubArray(b, t)
@@ -59,6 +59,12 @@ class Ptr(Ref, _typing.Generic[_Target]):
 			stubMap(b, t)
 		} else {
 			stubConstructor(b, t)
+		}
+		if t.Shape == pyapi.CallableObject && t.Underlying != nil {
+			stubValueConstructor(b, t)
+		}
+		if t.Call != nil {
+			stubMethod(b, t.Call)
 		}
 		if t.Shape == pyapi.ChannelObject {
 			stubChannel(b, t)
@@ -81,11 +87,7 @@ class Ptr(Ref, _typing.Generic[_Target]):
 			fmt.Fprintf(b, "    %s: %s\n", f.Name, annotation(f.Type))
 		}
 		for _, m := range t.Methods {
-			params := "self"
-			for _, arg := range m.Params {
-				params += ", " + arg.Name + ": " + annotation(arg.Type)
-			}
-			fmt.Fprintf(b, "    def %s(%s) -> %s: ...\n", m.Name, params, returnAnnotation(m))
+			stubMethod(b, m)
 		}
 	}
 }
@@ -127,4 +129,15 @@ func stubConstructor(b *strings.Builder, t *pyapi.Type) {
 	if t.Shape == pyapi.PointerObject && t.Underlying == nil {
 		fmt.Fprintf(b, "    @_builtins.classmethod\n    def from_value(cls, value: %s) -> _typing.Self: ...\n", annotation(t.Elem))
 	}
+}
+
+func stubMethod(b *strings.Builder, m *pyapi.Function) {
+	params := "self"
+	for _, arg := range m.Params {
+		params += ", " + arg.Name + ": " + annotation(arg.Type)
+	}
+	fmt.Fprintf(b, "    def %s(%s) -> %s: ...\n", m.Name, params, returnAnnotation(m))
+}
+func stubValueConstructor(b *strings.Builder, t *pyapi.Type) {
+	fmt.Fprintf(b, "    def __new__(cls, value: %s) -> _typing.Self: ...\n    def __init__(self, value: %s) -> None: ...\n", annotation(t.Underlying), annotation(t.Underlying))
 }

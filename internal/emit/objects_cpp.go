@@ -86,6 +86,9 @@ func cppZeroValue(t *abi.Type) string {
 
 func cppClass(b *strings.Builder, c *abi.Class) {
 	t, cls := c.Type, classVar(c.Type)
+	if t.Python.Shape == pyapi.CallableObject {
+		cppNilMembers(b, t, "Go functions")
+	}
 	if t.Python.Shape == pyapi.AnyObject {
 		cppNilMembers(b, t, "Go any values")
 	}

@@ -21,6 +21,7 @@ const (
 	Channel   Kind = "channel"
 	Map       Kind = "map"
 	Array     Kind = "array"
+	Signature Kind = "signature"
 	Pointer   Kind = "pointer"
 	Interface Kind = "interface"
 )
@@ -38,6 +39,7 @@ type Type struct {
 	Name        string // Basic and Named only
 	PackagePath string // Named only; empty for predeclared types
 
+	Call       *Function     // Signature only; parameter names canonicalized by position
 	Underlying *Type         // Named non-struct only
 	Elem       *Type         // Slice, Pointer or Channel
 	Length     int64         // Array only

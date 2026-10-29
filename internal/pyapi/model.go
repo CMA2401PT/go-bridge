@@ -19,6 +19,7 @@ type Type struct {
 	Name                      string
 	ByteSlice                 bool
 	Length                    int64
+	Call                      *Function
 	Key                       *Type
 	CanSend, CanRecv          bool
 	SendOnly, RecvOnly        *Type

@@ -12,15 +12,16 @@ import (
 type Shape string
 
 const (
-	Builtin       Shape = "builtin"
-	NamedValue    Shape = "named-value"
-	SliceObject   Shape = "slice"
-	StructObject  Shape = "struct"
-	PointerObject Shape = "pointer"
-	AnyObject     Shape = "any"
-	ChannelObject Shape = "channel"
-	MapObject     Shape = "map"
-	ArrayObject   Shape = "array"
+	Builtin        Shape = "builtin"
+	NamedValue     Shape = "named-value"
+	SliceObject    Shape = "slice"
+	StructObject   Shape = "struct"
+	PointerObject  Shape = "pointer"
+	AnyObject      Shape = "any"
+	ChannelObject  Shape = "channel"
+	MapObject      Shape = "map"
+	ArrayObject    Shape = "array"
+	CallableObject Shape = "callable"
 )
 
 // Field contains a visible Go selector and its single shared Python spelling.
@@ -37,6 +38,8 @@ func shape(t *gomodel.Type) Shape {
 		return Builtin
 	case gomodel.Slice:
 		return SliceObject
+	case gomodel.Signature:
+		return CallableObject
 	case gomodel.Array:
 		return ArrayObject
 	case gomodel.Map:
@@ -56,6 +59,8 @@ func shape(t *gomodel.Type) Shape {
 			return NamedValue
 		case gomodel.Slice:
 			return SliceObject
+		case gomodel.Signature:
+			return CallableObject
 		case gomodel.Array:
 			return ArrayObject
 		case gomodel.Map:
@@ -81,6 +86,14 @@ func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
 		t.Elem = mapped[base.Elem]
 		t.Key = mapped[base.Key]
 		t.Length = base.Length
+		if base.Call != nil {
+			call, err := planFunction(base.Call, mapped, t.Go.String())
+			if err != nil {
+				return err
+			}
+			call.Name = "__call__"
+			t.Call = call
+		}
 		if t.Shape == ChannelObject {
 			t.CanSend = base.Direction != types.RecvOnly
 			t.CanRecv = base.Direction != types.SendOnly
@@ -112,7 +125,7 @@ func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
 		switch t.Shape {
 		case StructObject, ArrayObject:
 			methods = t.Go.PointerMethods
-		case NamedValue, SliceObject, ChannelObject, MapObject:
+		case NamedValue, SliceObject, ChannelObject, MapObject, CallableObject:
 			methods = t.Go.ValueMethods
 		case PointerObject:
 			if t.Go.Kind == gomodel.Pointer {
@@ -168,6 +181,26 @@ func className(t *gomodel.Type) (string, error) {
 	}
 	if t.Kind == gomodel.Named {
 		return avoidKeyword(t.Name), nil
+	}
+	if t.Kind == gomodel.Signature {
+		parts := []string{"Func"}
+		for _, tuple := range [][]gomodel.Parameter{t.Call.Params, t.Call.Results} {
+			if len(tuple) == 0 {
+				parts = append(parts, "Void")
+			}
+			for i, p := range tuple {
+				if i > 0 {
+					parts = append(parts, "And")
+				}
+				stem, err := typeStem(p.Type)
+				if err != nil {
+					return "", err
+				}
+				parts = append(parts, stem)
+			}
+			parts = append(parts, "To")
+		}
+		return strings.Join(parts[:len(parts)-1], ""), nil
 	}
 	if t.Kind == gomodel.Array {
 		elem, err := typeStem(t.Elem)

@@ -112,7 +112,10 @@ func goOperation(b *strings.Builder, op *abi.Operation) {
 		if op.Receiver.Python.Variable() {
 			receiver = "bridgeGet[" + op.Receiver.Cell + "](a0)"
 		}
-		target = "(" + receiver + ")." + op.Python.Go.Name
+		target = "(" + receiver + ")"
+		if !op.Invoke {
+			target += "." + op.Python.Go.Name
+		}
 	}
 	args := join(len(op.Params)-offset, func(i int) string { return goInput(op.Params[i+offset], fmt.Sprintf("a%d", i+offset)) })
 	fmt.Fprintf(b, "%s(%s)\n", target, args)
@@ -135,7 +138,7 @@ func goInput(t *abi.Type, value string) string {
 			return "bridgeAny(" + value + ")"
 		case pyapi.StructObject, pyapi.ArrayObject:
 			return "*bridgeGet[" + t.Cell + "](" + value + ")"
-		case pyapi.PointerObject, pyapi.ChannelObject, pyapi.MapObject:
+		case pyapi.PointerObject, pyapi.ChannelObject, pyapi.MapObject, pyapi.CallableObject:
 			result = "bridgePointer[" + t.Cell + "](" + value + ")"
 		default:
 			result = "bridgeGet[" + t.Cell + "](" + value + ")"
@@ -162,7 +165,7 @@ func goOutput(b *strings.Builder, t *abi.Type, field, value string) {
 			fmt.Fprintf(b, "%s = bridgePinAny(%s)\n", field, value)
 		case pyapi.StructObject, pyapi.ArrayObject:
 			fmt.Fprintf(b, "%s = bridgeVariable(%s)\n", field, value)
-		case pyapi.PointerObject, pyapi.ChannelObject, pyapi.MapObject:
+		case pyapi.PointerObject, pyapi.ChannelObject, pyapi.MapObject, pyapi.CallableObject:
 			fmt.Fprintf(b, "if (%s) != nil {%s = bridgePin((%s)(%s))}\n", value, field, t.Cell, value)
 		default:
 			fmt.Fprintf(b, "%s = bridgePin((%s)(%s))\n", field, t.Cell, value)

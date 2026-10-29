@@ -137,6 +137,14 @@ func (b *builder) visit(t types.Type, where string) (*Type, error) {
 	case *types.Slice:
 		n.Kind = Slice
 		n.Elem, err = b.visit(t.Elem(), where+" -> slice element")
+	case *types.Signature:
+		n.Kind = Signature
+		n.Call, err = b.signature("__call__", t, nil, where)
+		if err == nil {
+			for i := range n.Call.Params {
+				n.Call.Params[i].Name = fmt.Sprintf("arg%d", i+1)
+			}
+		}
 	case *types.Array:
 		n.Kind, n.Length = Array, t.Len()
 		n.Elem, err = b.visit(t.Elem(), where+" -> array element")
@@ -255,14 +263,16 @@ func (b *builder) methods(owner *types.Named, selected types.Type, where string)
 // function describes obj's signature. selected is the type whose method set
 // produced obj, or nil for a package-level function.
 func (b *builder) function(obj *types.Func, selected types.Type, where string) (*Function, error) {
-	sig := obj.Signature()
+	return b.signature(obj.Name(), obj.Signature(), selected, where)
+}
+func (b *builder) signature(name string, sig *types.Signature, selected types.Type, where string) (*Function, error) {
 	if sig.TypeParams().Len() != 0 {
 		return nil, fmt.Errorf("%s: generic function is not supported", where)
 	}
 	if sig.Variadic() {
 		return nil, fmt.Errorf("%s: variadic function is not supported", where)
 	}
-	fn := &Function{Name: obj.Name(), SelectedReceiver: selected}
+	fn := &Function{Name: name, SelectedReceiver: selected}
 	if sig.Recv() != nil {
 		fn.Receiver = types.Unalias(sig.Recv().Type())
 		_, fn.PointerReceiver = fn.Receiver.(*types.Pointer)

@@ -48,6 +48,7 @@ type Type struct {
 type Operation struct {
 	Python   *pyapi.Function
 	Receiver *Type
+	Invoke   bool   // receiver is a function value, called directly
 	Symbol   string // exported C function name
 	Result   string // C name of the result struct; empty for void operations
 	Params   []*Type
@@ -114,6 +115,11 @@ func Plan(p *pyapi.Package) (*Package, error) {
 		}
 		if t.Shape != pyapi.Builtin {
 			c := planClass(t, wire)
+			if t.Call != nil {
+				op := planCall(t.Call, w, wire, len(result.Operations))
+				op.Invoke = true
+				result.Operations = append(result.Operations, op)
+			}
 			for _, f := range t.Methods {
 				op := planCall(f, w, wire, len(result.Operations))
 				c.Methods = append(c.Methods, op)
