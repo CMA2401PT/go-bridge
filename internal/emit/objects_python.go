@@ -53,6 +53,8 @@ class Ptr(Ref, _typing.Generic[_Target]):
 		fmt.Fprintf(b, "@_typing.final\nclass %s(%s):\n", t.Name, base)
 		if t.Shape == pyapi.AnyObject || t.Shape == pyapi.ChannelObject {
 			b.WriteString("    @_builtins.classmethod\n    def nil(cls) -> _typing.Self: ...\n    @_builtins.property\n    def is_nil(self) -> _builtins.bool: ...\n    def __bool__(self) -> _typing.Never: ...\n")
+		} else if t.Shape == pyapi.MapObject {
+			stubMap(b, t)
 		} else {
 			stubConstructor(b, t)
 		}

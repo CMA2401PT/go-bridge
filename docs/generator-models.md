@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | Basic | `Name`、`Go` | int、string |
 | Slice | `Elem` | `[]int` 指向 int 节点 |
+| Map | `Key`、`Elem` | `map[K]V` 递归收集键和值类型 |
 | Channel | `Elem`、`Direction` | `chan T`、`chan<- T`、`<-chan T` |
 | Pointer | `Elem` | `**int` 指向 `*int` 节点 |
 | Interface | `Go`，无静态动态类型依赖 | any、interface{} |

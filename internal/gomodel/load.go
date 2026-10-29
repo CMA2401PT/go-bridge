@@ -137,6 +137,12 @@ func (b *builder) visit(t types.Type, where string) (*Type, error) {
 	case *types.Slice:
 		n.Kind = Slice
 		n.Elem, err = b.visit(t.Elem(), where+" -> slice element")
+	case *types.Map:
+		n.Kind = Map
+		n.Key, err = b.visit(t.Key(), where+" -> map key")
+		if err == nil {
+			n.Elem, err = b.visit(t.Elem(), where+" -> map value")
+		}
 	case *types.Chan:
 		n.Kind, n.Direction = Channel, t.Dir()
 		n.Elem, err = b.visit(t.Elem(), where+" -> channel element")

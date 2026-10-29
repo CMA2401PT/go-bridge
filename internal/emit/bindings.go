@@ -40,6 +40,9 @@ module.doc() = "Generated Go bindings";
 		cppRefClasses(&b)
 	}
 	cppClassTypes(&b, p)
+	for _, m := range p.Maps {
+		cppMap(&b, m)
+	}
 	for _, ch := range p.Channels {
 		cppChannel(&b, ch)
 	}

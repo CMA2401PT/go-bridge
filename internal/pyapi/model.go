@@ -18,6 +18,7 @@ type Type struct {
 	Go                        *gomodel.Type
 	Name                      string
 	ByteSlice                 bool
+	Key                       *Type
 	CanSend, CanRecv          bool
 	SendOnly, RecvOnly        *Type
 	Shape                     Shape

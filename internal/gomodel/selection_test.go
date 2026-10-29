@@ -104,7 +104,7 @@ func TestEnsureSharesTypeIdentity(t *testing.T) {
 
 func TestUnsupportedPromotedFieldHasContext(t *testing.T) {
 	for _, source := range []string{
-		`type hidden struct { M map[string]int }; type Outer struct { hidden }`,
+		`type hidden struct { M complex128 }; type Outer struct { hidden }`,
 		`type inner int; type hidden struct { M inner }; type Outer struct { hidden }`,
 	} {
 		_, err := analyzeSource(t, source)

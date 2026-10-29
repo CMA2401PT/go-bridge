@@ -59,6 +59,7 @@ type Package struct {
 	Operations     []*Operation
 	Slices         []*Slice
 	Channels       []*Channel
+	Maps           []*Map
 	Types          []*Type
 	Classes        []*Class
 	Imports        []Import
@@ -93,6 +94,9 @@ func Plan(p *pyapi.Package) (*Package, error) {
 	}
 	for _, t := range p.Types {
 		w := wire[t]
+		if t.Shape == pyapi.MapObject {
+			result.Maps = append(result.Maps, planMap(t, wire))
+		}
 		if t.Shape == pyapi.ChannelObject {
 			result.Channels = append(result.Channels, planChannel(t, wire))
 		}

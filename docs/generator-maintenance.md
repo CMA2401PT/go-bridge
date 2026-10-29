@@ -60,7 +60,7 @@ named bool 的接口仍未定义；不要为完成代码而随意决定其 Pytho
 
 | 测试文件 | 关注的行为与关键测试 |
 | --- | --- |
-| [gomodel/model_test.go](../internal/gomodel/model_test.go) | 闭包与 alias、跨包同名类型；`TestMethodSetQueryDoesNotInventTypes`；01–11 的前端分析；独立 module 与构建条件 |
+| [gomodel/model_test.go](../internal/gomodel/model_test.go) | 闭包与 alias、跨包同名类型；`TestMethodSetQueryDoesNotInventTypes`；01–12 的前端分析；独立 module 与构建条件 |
 | [pyapi/model_test.go](../internal/pyapi/model_test.go) | Snake、参数名、alias、名字冲突与后端拒绝边界 |
 | [gomodel/selection_test.go](../internal/gomodel/selection_test.go) | 提升字段的 Go 可见性、歧义、隐藏嵌入、指针路径和错误上下文 |
 | [pyapi/classes_test.go](../internal/pyapi/classes_test.go) | 字段/方法/生成类名冲突、桥接与 Python 内建基类保留名 |
@@ -76,7 +76,7 @@ Go 环、nil 接收者和 nil 解引用的致命子进程。每个生成包的�
 未知动态值、失败清理、消费者类型收窄与 any holder 的并发释放。
 
 `emit` 的文本断言能发现两端签名或导出名偏离，但不能替代编译。`gomodel` 能分析
-01–11，也不能替代对应后端的端到端验收。反复制造解码失败能检查调用是否继续工作，
+01–12，也不能替代对应后端的端到端验收。反复制造解码失败能检查调用是否继续工作，
 但不是独立的内存泄漏测量；资源类扩展仍需生命周期观测和相应测试。
 
 在仓库根目录运行：

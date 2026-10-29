@@ -78,7 +78,7 @@ func TestPublicationAndDeterminism(t *testing.T) {
 }
 
 func TestFailureDoesNotPublish(t *testing.T) {
-	source := module(t, "func Unsupported(v map[string]int) {}")
+	source := module(t, "func Unsupported(v complex128) {}")
 	out := filepath.Join(t.TempDir(), "absent")
 	if err := Run(Config{Target: source, Output: out}); err == nil || !strings.Contains(err.Error(), "unsupported") {
 		t.Fatal(err)

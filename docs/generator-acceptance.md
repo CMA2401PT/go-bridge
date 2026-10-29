@@ -1,4 +1,4 @@
-# 01–11 生成器验收
+# 01–12 生成器验收
 
 验收对象是当前生成器产出的 Go、C++ 和 Python package，不编译手写 `expected/`。
 本轮环境为 macOS arm64、Go 1.27.1、CPython 3.13、pybind11 3.0.1。Linux 构建路径
@@ -16,6 +16,7 @@
 | 09 | typed nil、nil 接收者方法、Go 环、致命 panic 与 nil 解引用 | integration_pointer_test.go |
 | 10 | 全部基础转换、命名类型断言、复制／共享、typed nil、未知值、失败清理 | integration_any_test.go |
 | 11 / channel 组合 | 三种方向、阻塞/GIL、回调线程/异常/重入、命名与递归、字段/指针/slice/any、关闭 panic | integration_channel_test.go |
+| 12 / map 组合 | Go 键比较、struct 复制、引用共享、命名/递归、nil 写入 panic、批量清理 | integration_map_test.go |
 | any 组合 | any 字段、`*any`、`[]any`、命名容器、类型收窄、alias-only 包、并发句柄释放 | integration_any_test.go |
 | 组合 | 外部包类型、隐藏嵌入、命名字符串方法、struct slice、转换失败清理 | integration_object_test.go |
 | 资源 | 多模块同时导入、拒绝异模块对象、GC、失败路径句柄计数 | integration_slice_test.go |
@@ -56,7 +57,7 @@ GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/... -count=1
 构造省略字段得到 Go 零值，显式 None 不替代零值；保留成员名加下划线；具体包装类
 禁止 Python 子类化。slice 不可隐式迭代，复制到 Python 要显式调用批量方法。
 
-尚未支持的类型/API 由分析或规划阶段明确拒绝：命名／带方法 interface（含 error）、map、
+尚未支持的类型/API 由分析或规划阶段明确拒绝：命名／带方法 interface（含 error）、
 数组、匿名 struct、complex、unsafe.Pointer、函数值、泛型、可变参数、
 导出变量/常量和 named bool。
 命名冲突也明确报错，不悄悄丢弃字段或方法。完整对象规则见

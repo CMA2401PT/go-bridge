@@ -19,6 +19,7 @@ const (
 	Named     Kind = "named"
 	Slice     Kind = "slice"
 	Channel   Kind = "channel"
+	Map       Kind = "map"
 	Pointer   Kind = "pointer"
 	Interface Kind = "interface"
 )
@@ -38,6 +39,7 @@ type Type struct {
 
 	Underlying *Type         // Named non-struct only
 	Elem       *Type         // Slice, Pointer or Channel
+	Key        *Type         // Map key
 	Direction  types.ChanDir // Channel only
 	Fields     []Field       // Named struct only: direct exported fields
 	Selectable []Selection   // Named struct only: visible direct and promoted fields

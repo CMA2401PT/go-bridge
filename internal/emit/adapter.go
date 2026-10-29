@@ -40,6 +40,9 @@ func goSource(p *abi.Package) string {
 	for _, c := range p.AnyConversions {
 		fmt.Fprintf(&b, "typedef struct { uint8_t ok; %s value; } %s;\n", c.Type.C, c.Result)
 	}
+	for _, m := range p.Maps {
+		fmt.Fprintf(&b, "typedef struct { uint8_t ok; %s value; } %s;\n", m.Elem.C, m.Result)
+	}
 	for _, ch := range p.Channels {
 		if ch.Recv != "" {
 			fmt.Fprintf(&b, "typedef struct { uint8_t ok; %s value; } %s;\n", ch.Elem.C, ch.Result)
@@ -64,6 +67,9 @@ func goSource(p *abi.Package) string {
 	// An export is required even without API operations: cgo emits the header,
 	// and C++ can enter Go to wait for target package initialization.
 	fmt.Fprintf(&b, "\n//export %s\nfunc %s() {}\n", abi.InitSymbol, abi.InitSymbol)
+	for _, m := range p.Maps {
+		goMap(&b, m)
+	}
 	for _, ch := range p.Channels {
 		goChannel(&b, ch)
 	}
@@ -126,7 +132,7 @@ func goInput(t *abi.Type, value string) string {
 			return "bridgeAny(" + value + ")"
 		case pyapi.StructObject:
 			return "*bridgeGet[" + t.Cell + "](" + value + ")"
-		case pyapi.PointerObject, pyapi.ChannelObject:
+		case pyapi.PointerObject, pyapi.ChannelObject, pyapi.MapObject:
 			result = "bridgePointer[" + t.Cell + "](" + value + ")"
 		default:
 			result = "bridgeGet[" + t.Cell + "](" + value + ")"
@@ -153,7 +159,7 @@ func goOutput(b *strings.Builder, t *abi.Type, field, value string) {
 			fmt.Fprintf(b, "%s = bridgePinAny(%s)\n", field, value)
 		case pyapi.StructObject:
 			fmt.Fprintf(b, "%s = bridgeStruct(%s)\n", field, value)
-		case pyapi.PointerObject, pyapi.ChannelObject:
+		case pyapi.PointerObject, pyapi.ChannelObject, pyapi.MapObject:
 			fmt.Fprintf(b, "if (%s) != nil {%s = bridgePin((%s)(%s))}\n", value, field, t.Cell, value)
 		default:
 			fmt.Fprintf(b, "%s = bridgePin((%s)(%s))\n", field, t.Cell, value)

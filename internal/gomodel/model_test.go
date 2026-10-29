@@ -168,7 +168,7 @@ func TestUnsupportedHasContext(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
 		{`func Bad(v interface{ Read() int }) {}`, "parameter 1 (v): unsupported interface type"},
 		{`type Value interface{}`, "unsupported interface type"},
-		{`type Box struct { Data map[string]int }`, "field Data: unsupported type map[string]int"},
+		{`type Box struct { Data complex128 }`, "field Data: unsupported basic type complex128"},
 		{`func Bad() error { return nil }`, "result 1"},
 		{`func Bad(v [2]int) {}`, "unsupported type [2]int"},
 		{`func Bad(v func()) {}`, "unsupported type func()"},
@@ -221,8 +221,8 @@ func TestLoadExamples(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) != 11 {
-		t.Fatalf("expected 11 examples, got %d", len(paths))
+	if len(paths) != 12 {
+		t.Fatalf("expected 12 examples, got %d", len(paths))
 	}
 	for _, path := range paths {
 		t.Run(filepath.Base(path), func(t *testing.T) {
@@ -243,7 +243,7 @@ func TestLoadModuleAndBuildSelection(t *testing.T) {
 		"go.mod":     "module example.test/standalone\n\ngo 1.25.0\n",
 		"a.go":       "package standalone\nfunc Echo(v Value) Value { return v }\n",
 		"b.go":       "package standalone\ntype Value int\n",
-		"ignored.go": "//go:build never_bridge_test\n\npackage standalone\nfunc Unsupported(v map[int]int) {}\n",
+		"ignored.go": "//go:build never_bridge_test\n\npackage standalone\nfunc Unsupported(v complex128) {}\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, file), []byte(source), 0644); err != nil {
 			t.Fatal(err)

@@ -19,6 +19,7 @@ const (
 	PointerObject Shape = "pointer"
 	AnyObject     Shape = "any"
 	ChannelObject Shape = "channel"
+	MapObject     Shape = "map"
 )
 
 // Field contains a visible Go selector and its single shared Python spelling.
@@ -35,6 +36,8 @@ func shape(t *gomodel.Type) Shape {
 		return Builtin
 	case gomodel.Slice:
 		return SliceObject
+	case gomodel.Map:
+		return MapObject
 	case gomodel.Channel:
 		return ChannelObject
 	case gomodel.Pointer:
@@ -50,6 +53,8 @@ func shape(t *gomodel.Type) Shape {
 			return NamedValue
 		case gomodel.Slice:
 			return SliceObject
+		case gomodel.Map:
+			return MapObject
 		case gomodel.Channel:
 			return ChannelObject
 		case gomodel.Pointer:
@@ -69,6 +74,7 @@ func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
 			base = base.Underlying
 		}
 		t.Elem = mapped[base.Elem]
+		t.Key = mapped[base.Key]
 		if t.Shape == ChannelObject {
 			t.CanSend = base.Direction != types.RecvOnly
 			t.CanRecv = base.Direction != types.SendOnly
@@ -100,7 +106,7 @@ func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
 		switch t.Shape {
 		case StructObject:
 			methods = t.Go.PointerMethods
-		case NamedValue, SliceObject, ChannelObject:
+		case NamedValue, SliceObject, ChannelObject, MapObject:
 			methods = t.Go.ValueMethods
 		case PointerObject:
 			if t.Go.Kind == gomodel.Pointer {
@@ -136,6 +142,7 @@ var bridgeMembers = map[string]bool{
 	"value": true, "is_nil": true, "nil": true, "from_value": true, "addr": true, "ptr": true,
 	"clone": true, "copy_to_py_list": true, "copy_to_py_bytes": true, "unname": true,
 	"send": true, "recv": true, "close": true, "send_only": true, "recv_only": true,
+	"delete": true, "clear": true, "copy_to_py_items": true,
 	"as_any": true, "from_any": true, "try_from_any": true,
 }
 
@@ -155,6 +162,14 @@ func className(t *gomodel.Type) (string, error) {
 	}
 	if t.Kind == gomodel.Named {
 		return avoidKeyword(t.Name), nil
+	}
+	if t.Kind == gomodel.Map {
+		key, err := typeStem(t.Key)
+		if err != nil {
+			return "", err
+		}
+		elem, err := typeStem(t.Elem)
+		return "Map" + key + elem, err
 	}
 	if t.Kind == gomodel.Channel {
 		elem, err := typeStem(t.Elem)
