@@ -1,6 +1,6 @@
 # 类型映射总览
 
-本文汇总 01–11 已确认的 Go → Python 类型规则，是各案例 readme 的索引与上位约定。
+本文汇总 01–15 已确认的 Go → Python 类型规则，是各案例 readme 的索引与上位约定。
 具体 ABI、测试与限制见对应案例。本文描述手写样例；当前生成器的契约见
 [实施计划](../docs/generator-plan.md)与[运行时协议](../docs/generator-runtime.md)。
 样例与生成器均不恢复 Go panic；未恢复的 panic（包括 nil 解引用）会终止整个
@@ -12,10 +12,13 @@ Python 进程。
 | 分类 | 例子 | 说明 |
 | --- | --- | --- |
 | 基础值类型 | `int`、`string`、`bool` | 按值跨 ABI |
-| 引用类型 | `[]int`、`[]byte` | 共享底层数据，由 Go 管理 |
+| 引用类型 | `[]int`、`[]byte`、`map[string]int` | 共享底层数据，由 Go 管理 |
+| 数组 | `[3]int` | 固定长度的值，包装持有可寻址变量 |
+| 函数值 | `func(int) int` | 可调用的 Go 函数包装，保留闭包 |
 | 指针类型 | `*int`、`*[]int`、`*MyInt`、`**int` | 指向一个 Go 变量 |
 | 命名类型 | `type MyInt int`、`type MySlice []int`、`type MyStruct struct{...}` | 可以绑定方法，与底层类型是不同类型 |
 | 空 interface | `any`、`interface{}` | 保存动态类型和值，用 GoAny 持有，显式装箱和断言 |
+| 一般 interface | `io.Reader`、`error` | 返回声明的接口包装，调用 Go 实现的方法 |
 | 匿名 struct | `func F() struct{ X int }` | 不支持 |
 
 `type MyStruct struct{...}` 是底层类型为 struct 的命名类型，不属于匿名 struct。
@@ -29,25 +32,27 @@ Python 进程。
 3. **除基础值类型及以其为底层的命名类型外，Python 对象都是 `Ref`。** Ref 持有 Go
    句柄，保证 Go GC 不回收被引用的数据，析构时释放（04）。
 4. **值与变量。** Python 的 int 子类与 slice 包装对象是 Go 的**值**，不是可寻址的
-   Go 变量；struct 包装对象的句柄持有 `*T`，本身就是一个类型为 `T` 的 **Go 变量**。
-   这决定了方法集和取地址方式：不可寻址的值用 `ptr()` 复制后取地址，struct 变量
+   Go 变量；struct 和数组包装对象的句柄持有 `*T`，本身就是一个类型为 `T` 的 **Go 变量**。
+   这决定了方法集和取地址方式：不可寻址的值用 `ptr()` 复制后取地址，struct 和数组变量
    用 `addr()` 直接取地址。无论哪种，`*T` 都是独立的指针类。
 
 5. **类型闭包。** 生成器从 G 中出现的类型出发，递归生成构造和使用它们所需的
    全部类型，直到不再发现新类型。依赖是图，允许 `List → *List → List` 这样的环：
    - 指针类型 `*T`：生成 `T` 对应的类（`.value` 的类型）；
-   - 命名 struct `T`：总是生成 `PtrT`（`addr()` 的类型）；
-   - 以非 struct 为底层的命名类型：生成底层类型对应的类（`unname()` 与构造函数
+   - struct 或数组 `T`：总是生成对应指针类（`addr()` 的类型）；
+   - 以非 struct/interface 为底层的命名类型：生成底层类型对应的类（`unname()` 与构造函数
      参数的类型）；
-   - slice：生成元素类型；
+   - slice、数组、channel：生成元素类型；map 生成键和值类型；
+   - 函数值与 interface：生成公开调用签名涉及的类型；
    - struct：生成每个导出字段的类型（构造函数参数与字段的类型）。
 
    因此出现 `***int` 就会生成 `PtrPtrPtrInt`、`PtrPtrInt`、`PtrInt`；出现
    `type IntPtr *int` 就会生成 `PtrInt`。任何 `.value`、`unname()`、字段和构造
-   参数的类型都一定存在，且总能从基础值类型逐层构造出来（08）。
+   参数的类型都一定存在（08）。对象入口可以是公开构造器或 Go 函数返回值；
+   接口的隐藏实现不需要额外的 Python 构造器。
 
-6. **nil 是带类型的零值包装。** handle 0 表示指针或 any 的零值 nil，指针类、
-   命名指针与 GoAny 可以是 nil；struct 包装是变量，永远非 nil。Python 的 `None`
+6. **nil 是带类型的零值包装。** handle 0 表示指针、channel、map、函数值或 interface 的零值 nil；
+   struct 和数组包装是变量，永远非 nil。Python 的 `None`
    不表示 Go nil，作为 Go 值输入一律拒绝；nil 的类型与 Go 一样是静态的，所以
    nil 接收者也能调用方法（09）。
    GoAny 中带类型的 nil 不等于 nil interface（10）；try 断言的 None 结果只表示失败。
@@ -67,6 +72,21 @@ Python 进程。
   共享与 append 语义。刻意不支持迭代：逐元素跨 cgo 太慢，应先 `copy_to_py_list()`。
 - slice 包装对象是一个不可变的 slice 头，Python 赋值只产生别名，对应 Go 的
   `a := s`。
+
+## map：Go 键比较与共享
+
+`map[K]V` 映射为 `MapKV`，从键值对 iterable 复制构造。查找、包含、写入与删除均由
+Go 判定键相等。map 包装共享同一张表，clone 浅复制。map 中的 struct 和数组元素
+不可寻址，读取返回副本。批量读取使用 copy_to_py_items 返回键值对列表，避免 Python
+包装对象的身份比较改变 Go 键语义。nil 可读，写入 nil 由 Go panic。
+见 [12_map](12_map/readme.md)。
+
+## 数组：定长值与变量视图
+
+`[N]T` 映射为 `ArrayNT`。无参构造得到零值，iterable 构造要求恰好 N 个元素。
+数组包装表示一个 Go 变量，支持下标、copy.copy、addr 和 copy_to_py_list。
+传参、返回、赋值、命名转换复制数组值；字段、slice 或数组元素、指针解引用保留
+变量视图。数组内引用类型的共享关系由元素自身决定。见 [13_array](13_array/readme.md)。
 
 ## 命名类型
 
@@ -175,13 +195,14 @@ Python 进程。
 
 ## any：显式装箱与类型断言
 
-`any`／`interface{}` → `GoAny(Ref)`（10）。参数只接受 GoAny，返回值统一为 GoAny；
+`any`／`interface{}` → `GoAny(GoInterface)`（10 的显式转换规则，15 的公共基类）。参数只接受 GoAny，返回值统一为 GoAny；
 GoAny 保存一个不可直接修改的 interface 值，与 Python `typing.Any` 无关。
 
 - 基础值使用模块函数，如 `int_as_any(v)`、`any_as_int(a)`、
   `try_any_as_int(a)`。按 Go 类型区分整数宽度、float32/float64、bool、string。
 - 其他已映射具体类型，包括命名标量，提供 `v.as_any()`、`T.from_any(a)`、
-  `T.try_from_any(a)`。GoAny 本身直接作为 any 参数传入，不重复提供这组转换。
+  `T.try_from_any(a)`。GoAny 直接作为 any 参数传入，并继承 as_any 复制包装。
+  动态断言接受 GoInterface，可直接传入其他接口包装。
 - 装箱保留准确的 Go 动态类型，取出执行具体类型断言，不执行类型转换。
   `MyInt` 与 int、命名 slice 与底层 slice、T 与 `*T` 均不互认。
 - 普通断言不匹配抛 TypeError；try 不匹配返回 None，成功返回 `T`，标注为
@@ -195,10 +216,24 @@ GoAny 保存一个不可直接修改的 interface 值，与 Python `typing.Any` 
 - any 句柄直接保存原动态值，不增加 anyCell 包装。命名 slice／指针在装箱前恢复
   名字，取出后才按其既有 Cell 归一化。非 nil GoAny 和非 nil 对象结果各自拥有独立句柄。
 - any 不扩展静态类型闭包。Go 返回的未知动态类型可以持有、传回；只有已映射的
-  类型提供 Python 侧取出操作。生成器支持 `*any`、`[]any` 的既有指针／slice 操作；
-  带方法／命名 interface 暂未覆盖。
+  类型提供 Python 侧取出操作。生成器支持 `*any`、`[]any` 的既有指针／slice 操作。
 
 具体失败协议、ABI、字段和生命周期见 [10_any](10_any/readme.md)。
+
+## 一般 interface：Go 实现的方法集
+
+接口返回声明的包装类型。具体包装类继承 GoInterface，提供接口公开方法；实现可以
+是不在类型闭包内的隐藏 Go 类型。`I(value)` 按 Go 静态可赋值规则显式转换，
+`I.from_any(value)` 和 `try_from_any(value)` 按动态类型断言。nil interface 保留接口
+包装，不自动变成 None。error 同样是普通接口，Error 方法映射为 error()。
+详见 [15_interface](15_interface/readme.md)。
+
+## 函数值：调用 Go 闭包
+
+Go 函数值成为可调用包装对象，例如 `FuncIntToInt`。调用释放 GIL，参数统一按位置
+命名为 arg1、arg2；多返回值使用 tuple。包装和传回 Go 的函数值共享闭包状态。
+命名函数类型可通过底层函数包装构造，unname 保留同一闭包。Python callable 不作为
+Go 函数传入。见 [14_func](14_func/readme.md)。
 
 ## channel：同步回调接收
 
@@ -213,9 +248,9 @@ GoAny 保存一个不可直接修改的 interface 值，与 Python `typing.Any` 
 
 | Python 类 | 值接收者 | 指针接收者 |
 | --- | --- | --- |
-| 命名值类型（int 子类）、命名 slice | 有 | 无，需先 `ptr()` |
+| 命名标量、slice、map、channel、函数值 | 有 | 无，需先 `ptr()` |
 | 指针类 | 有，`(*p).M()` | 有 |
-| 命名 struct（变量） | 有，作用在副本上 | 有 |
+| struct、命名数组（变量） | 有，作用在副本上 | 有 |
 
 命名 struct 是变量，对应 Go 中可寻址的 `v.PtrM()`；它的指针类 `PtrT` 与其他指针类
 一样有全部方法。不可寻址的值不挂指针方法：临时装箱调用会静默丢失修改，生成器也无法判断方法
@@ -223,12 +258,11 @@ GoAny 保存一个不可直接修改的 interface 值，与 Python `typing.Any` 
 
 ## 生命周期与边界
 
-- 一个持有关系对应一个 Ref（04–09 用 Pin，10 用 cgo.Handle）；视图、读出的
+- 一个持有关系对应一个 Ref（04–09 用 Pin，10–15 用 cgo.Handle）；视图、读出的
   slice、`p.value` 都创建新的持有关系。Go 值中从不保存句柄，没有跨边界引用环。
   被指向的数据由 Go 可达性管理。
-- nil 与 panic 见上节。06–08 的 Ref 早于 09，仍不接受 nil、不 recover；08 读取
-  nil 级时抛 `ValueError` 是临时行为。生成器的 nil 表示参考 09，panic 按当前协议处理。
+- nil 与 panic 见上节。06–08 的 Ref 早于 09；生成器的 nil 表示参考 09，
+  样例和生成器均不恢复 Go panic。
 - struct `T` 与 `PtrT` 的句柄都持有 `*T`，共用字段与方法导出；只是 Python 类型不同。
-- 匿名 struct 不支持：出现在参数、返回值中的 API 不生成；命名 struct 中类型为
-  匿名 struct 的字段跳过，由生成器给出警告。
-- 未覆盖：指针相等、标量字段取地址 `&s.X`、map、带方法／命名 interface、error。
+- 匿名 struct 不支持：生成器遇到导出签名或字段依赖此类型时明确报错。
+- 未覆盖：指针相等、标量字段取地址 `&s.X`、Python 实现 Go callback/interface。

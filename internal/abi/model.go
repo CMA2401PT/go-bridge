@@ -56,18 +56,19 @@ type Operation struct {
 }
 
 type Package struct {
-	Python         *pyapi.Package
-	Operations     []*Operation
-	Slices         []*Slice
-	Channels       []*Channel
-	Maps           []*Map
-	Arrays         []*Array
-	Types          []*Type
-	Classes        []*Class
-	Imports        []Import
-	IntBits        int   // width of Go int on the target; checked by the C++ side
-	Any            *Type // GoAny, or nil when the closure has no empty interface
-	AnyConversions []*AnyConversion
+	Python               *pyapi.Package
+	Operations           []*Operation
+	Slices               []*Slice
+	Channels             []*Channel
+	Maps                 []*Map
+	Arrays               []*Array
+	InterfaceConversions []*InterfaceConversion
+	Types                []*Type
+	Classes              []*Class
+	Imports              []Import
+	IntBits              int   // width of Go int on the target; checked by the C++ side
+	Any                  *Type // GoAny, or nil when the closure has no empty interface
+	AnyConversions       []*AnyConversion
 }
 
 // Plan assigns wire types and stable symbols. Symbols use declaration order,
@@ -96,6 +97,9 @@ func Plan(p *pyapi.Package) (*Package, error) {
 	}
 	for _, t := range p.Types {
 		w := wire[t]
+		for _, source := range t.Implementors {
+			result.InterfaceConversions = append(result.InterfaceConversions, &InterfaceConversion{Target: w, Source: wire[source], Symbol: fmt.Sprintf("BrType%dFromType%d", t.Go.ID, source.Go.ID)})
+		}
 		if t.Shape == pyapi.ArrayObject {
 			result.Arrays = append(result.Arrays, planArray(t, wire))
 		}

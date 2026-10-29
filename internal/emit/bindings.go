@@ -39,7 +39,11 @@ module.doc() = "Generated Go bindings";
 	if p.HasRefs() {
 		cppRefClasses(&b)
 	}
+	if p.Any != nil {
+		cppInterfaceBase(&b, p.Any)
+	}
 	cppClassTypes(&b, p)
+	cppInterfaceConstructors(&b, p)
 	for _, a := range p.Arrays {
 		cppArray(&b, a)
 	}

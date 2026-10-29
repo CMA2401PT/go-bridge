@@ -28,6 +28,7 @@ type Type struct {
 	Fields                    []*Field
 	Constructor               []*Field
 	Methods                   []*Function
+	Implementors              []*Type // statically assignable Go wrappers for interface construction
 }
 
 type Parameter struct {
@@ -97,11 +98,12 @@ func Snake(name string) string {
 
 // reserved are package-level names the generated package itself defines.
 var reserved = map[string]string{
-	"_native": "native module",
-	"__all__": "package exports",
-	"Ref":     "Go ownership base",
-	"Slice":   "Go slice base",
-	"Ptr":     "Go pointer base",
+	"_native":     "native module",
+	"__all__":     "package exports",
+	"Ref":         "Go ownership base",
+	"Slice":       "Go slice base",
+	"Ptr":         "Go pointer base",
+	"GoInterface": "Go interface base",
 }
 
 // namespace records the origin of each claimed name, so a collision can
@@ -157,6 +159,7 @@ func Plan(g *gomodel.Package, name string) (*Package, error) {
 			}
 		}
 	}
+	planInterfaces(p)
 	if err := planAny(p, names); err != nil {
 		return nil, err
 	}

@@ -40,7 +40,7 @@ type Type struct {
 	PackagePath string // Named only; empty for predeclared types
 
 	Call       *Function     // Signature only; parameter names canonicalized by position
-	Underlying *Type         // Named non-struct only
+	Underlying *Type         // Named non-struct, non-interface only
 	Elem       *Type         // Slice, Pointer or Channel
 	Length     int64         // Array only
 	Key        *Type         // Map key

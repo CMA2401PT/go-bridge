@@ -73,7 +73,9 @@ assert bridge.Value is bridge.GoAny
 boxed = bridge.int_as_any(7)
 nil_any = bridge.GoAny.nil()
 assert nil_any.is_nil and not boxed.is_nil
-assert not hasattr(bridge.GoAny, "as_any")
+assert isinstance(boxed, bridge.GoInterface)
+assert bridge.any_as_int(boxed.as_any()) == 7
+assert nil_any.as_any().is_nil
 assert bridge.Count(3).as_any_() == 3
 assert bridge.Count(3).from_any_() == 3
 assert bridge.Count(3).try_from_any_() == 3

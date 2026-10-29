@@ -12,6 +12,8 @@ func classVar(t *abi.Type) string { return "class" + t.Cpp }
 
 func cppBase(t *abi.Type) string {
 	switch t.Python.Shape {
+	case pyapi.AnyObject, pyapi.InterfaceObject:
+		return "InterfaceRef"
 	case pyapi.SliceObject:
 		return "Slice"
 	case pyapi.PointerObject:
@@ -89,8 +91,8 @@ func cppClass(b *strings.Builder, c *abi.Class) {
 	if t.Python.Shape == pyapi.CallableObject {
 		cppNilMembers(b, t, "Go functions")
 	}
-	if t.Python.Shape == pyapi.AnyObject {
-		cppNilMembers(b, t, "Go any values")
+	if t.Python.Shape == pyapi.AnyObject || t.Python.Shape == pyapi.InterfaceObject {
+		fmt.Fprintf(b, "%s.def_static(\"nil\", [] {return %s(0);});\n", cls, t.Cpp)
 	}
 	if t.Python.Shape == pyapi.StructObject {
 		cppStructConstructor(b, c)

@@ -158,10 +158,21 @@ func (b *builder) visit(t types.Type, where string) (*Type, error) {
 		n.Kind, n.Direction = Channel, t.Dir()
 		n.Elem, err = b.visit(t.Elem(), where+" -> channel element")
 	case *types.Interface:
-		if !t.Complete().Empty() {
-			return nil, fmt.Errorf("%s: unsupported interface type %s", where, t)
+		if !t.Complete().IsMethodSet() {
+			return nil, fmt.Errorf("%s: constraint interface cannot be used as a value", where)
 		}
 		n.Kind = Interface
+		for i := 0; i < t.Complete().NumMethods(); i++ {
+			method := t.Method(i)
+			if !method.Exported() {
+				return nil, fmt.Errorf("%s: unnamed interface with unexported method %s cannot be named outside its package", where, method.Name())
+			}
+			fn, e := b.function(method, t, where+" -> method "+method.Name())
+			if e != nil {
+				return nil, e
+			}
+			n.ValueMethods = append(n.ValueMethods, fn)
+		}
 	case *types.Named:
 		err = b.named(n, t, where)
 	default:
@@ -178,14 +189,14 @@ func (b *builder) named(n *Type, t *types.Named, where string) error {
 	if t.Obj().Pkg() != nil {
 		n.PackagePath = t.Obj().Pkg().Path()
 	}
-	if _, ok := t.Underlying().(*types.Interface); ok {
-		return fmt.Errorf("%s: unsupported interface type %s", where, t)
-	}
-	if !t.Obj().Exported() {
+	if !t.Obj().Exported() && t.Obj().Pkg() != nil {
 		return fmt.Errorf("%s: non-exported named type %s is not supported", where, t)
 	}
 	if t.TypeParams().Len() != 0 || t.TypeArgs().Len() != 0 {
 		return fmt.Errorf("%s: generic type %s is not supported", where, t)
+	}
+	if iface, ok := t.Underlying().(*types.Interface); ok && !iface.Complete().IsMethodSet() {
+		return fmt.Errorf("%s: constraint interface cannot be used as a value", where)
 	}
 	if basic, ok := t.Underlying().(*types.Basic); ok && basic.Kind() == types.Bool {
 		return fmt.Errorf("%s: named bool %s has no defined Python mapping", where, t)
@@ -198,7 +209,7 @@ func (b *builder) named(n *Type, t *types.Named, where string) error {
 		if err := b.selections(n, t, where); err != nil {
 			return err
 		}
-	} else {
+	} else if _, isInterface := t.Underlying().(*types.Interface); !isInterface {
 		underlying, err := b.visit(t.Underlying(), where+" -> underlying type")
 		if err != nil {
 			return err

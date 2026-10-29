@@ -166,10 +166,9 @@ func TestSameNameInDifferentPackages(t *testing.T) {
 
 func TestUnsupportedHasContext(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
-		{`func Bad(v interface{ Read() int }) {}`, "parameter 1 (v): unsupported interface type"},
-		{`type Value interface{}`, "unsupported interface type"},
 		{`type Box struct { Data complex128 }`, "field Data: unsupported basic type complex128"},
-		{`func Bad() error { return nil }`, "result 1"},
+		{`type Constraint interface {~int}`, "constraint interface"},
+		{`func Bad(v interface{hidden()}) {}`, "unnamed interface with unexported method"},
 		{`func Bad(v struct{X int}) {}`, "unsupported type struct"},
 		{`type private int; func Bad() private { return 0 }`, "non-exported named type"},
 		{`type Flag bool`, "named bool"},
@@ -219,8 +218,8 @@ func TestLoadExamples(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) != 14 {
-		t.Fatalf("expected 14 examples, got %d", len(paths))
+	if len(paths) != 15 {
+		t.Fatalf("expected 15 examples, got %d", len(paths))
 	}
 	for _, path := range paths {
 		t.Run(filepath.Base(path), func(t *testing.T) {

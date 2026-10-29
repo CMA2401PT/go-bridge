@@ -85,6 +85,9 @@ func goSource(p *abi.Package) string {
 	for _, c := range p.Classes {
 		goClass(&b, c)
 	}
+	for _, c := range p.InterfaceConversions {
+		goInterfaceConversion(&b, c)
+	}
 	for _, c := range p.AnyConversions {
 		goAnyConversion(&b, c)
 	}
@@ -138,7 +141,7 @@ func goInput(t *abi.Type, value string) string {
 			return "bridgeAny(" + value + ")"
 		case pyapi.StructObject, pyapi.ArrayObject:
 			return "*bridgeGet[" + t.Cell + "](" + value + ")"
-		case pyapi.PointerObject, pyapi.ChannelObject, pyapi.MapObject, pyapi.CallableObject:
+		case pyapi.PointerObject, pyapi.ChannelObject, pyapi.MapObject, pyapi.CallableObject, pyapi.InterfaceObject:
 			result = "bridgePointer[" + t.Cell + "](" + value + ")"
 		default:
 			result = "bridgeGet[" + t.Cell + "](" + value + ")"
@@ -161,7 +164,7 @@ func goOutput(b *strings.Builder, t *abi.Type, field, value string) {
 	switch t.Kind {
 	case abi.Handle:
 		switch t.Python.Shape {
-		case pyapi.AnyObject:
+		case pyapi.AnyObject, pyapi.InterfaceObject:
 			fmt.Fprintf(b, "%s = bridgePinAny(%s)\n", field, value)
 		case pyapi.StructObject, pyapi.ArrayObject:
 			fmt.Fprintf(b, "%s = bridgeVariable(%s)\n", field, value)

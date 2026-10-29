@@ -40,7 +40,7 @@ func cppAnyConversion(b *strings.Builder, anyType *abi.Type, c *abi.AnyConversio
 		} else {
 			fmt.Fprintf(b, "%s.attr(%q) = py::staticmethod(py::cpp_function([=](py::handle value) -> py::object {\n", cls, form.name)
 		}
-		fmt.Fprintf(b, "auto input = %s(value);\nOwnedBuffer<%s, %s> owner(1);\nauto result = %s(input);\nowner.values[0] = result.value;\nif (!result.ok) {\n", cppInput(anyType), t.C, cppDeleter(t), c.Assert)
+		fmt.Fprintf(b, "auto input = %s(value);\nOwnedBuffer<%s, %s> owner(1);\nauto result = %s(input);\nowner.values[0] = result.value;\nif (!result.ok) {\n", "handle_arg<InterfaceRef>", t.C, cppDeleter(t), c.Assert)
 		if form.optional {
 			b.WriteString("return py::none();\n")
 		} else {

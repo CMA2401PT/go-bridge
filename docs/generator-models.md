@@ -19,8 +19,9 @@
 | Map | `Key`、`Elem` | `map[K]V` 递归收集键和值类型 |
 | Channel | `Elem`、`Direction` | `chan T`、`chan<- T`、`<-chan T` |
 | Pointer | `Elem` | `**int` 指向 `*int` 节点 |
-| Interface | `Go`，无静态动态类型依赖 | any、interface{} |
-| Named，底层非 struct | `Name`、`PackagePath`、`Underlying`、方法集 | `type Count int` 指向 int 节点 |
+| Interface | `Go`、公开方法集 | any、匿名方法接口 |
+| Named，底层非 struct/interface | `Name`、`PackagePath`、`Underlying`、方法集 | `type Count int` 指向 int 节点 |
+| Named，底层 interface | `Name`、`PackagePath`、方法集 | 保留原接口与私有方法的身份 |
 | Named，底层 struct | `Name`、`PackagePath`、`Fields`、`Selectable`、方法集 | `type Node struct { Next *Node }` |
 
 这里没有独立的匿名 Struct 节点：匿名 struct 目前被拒绝，命名 struct 的直接导出字段
@@ -71,7 +72,7 @@ visit(t)
 沿用这条路径，而不是只报告一个缺少来源的类型名。
 
 前端同时执行支持域校验，并非无条件接纳所有合法 Go 类型。例如 named bool、泛型、
-匿名 struct、命名／非空 interface、map 都在这里被拒绝。空 interface 通过完成后的
+匿名 struct、类型约束接口和含私有方法的匿名接口都在这里被拒绝。空 interface 通过完成后的
 `types.Interface.Empty()` 识别；any 与 interface{} 共用节点，不分析运行时动态值。
 named bool 的拒绝原因来自尚未确定的
 Python 表示；将来解决该映射时，也必须移除此处的限制。

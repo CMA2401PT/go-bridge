@@ -12,6 +12,11 @@ import (
 func complete(g *gomodel.Package) error {
 	for i := 0; i < len(g.Types); i++ {
 		t := g.Types[i]
+		if _, ok := t.Go.Underlying().(*types.Interface); ok {
+			if _, err := g.Ensure(types.NewInterfaceType(nil, nil).Complete(), "bridge interface conversions"); err != nil {
+				return err
+			}
+		}
 		if t.Kind == gomodel.Channel && t.Direction == types.SendRecv {
 			for _, direction := range []types.ChanDir{types.SendOnly, types.RecvOnly} {
 				if _, err := g.Ensure(types.NewChan(direction, t.Elem.Go), "bridge channel direction of "+t.String()); err != nil {

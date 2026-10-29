@@ -116,7 +116,8 @@ pybind11 扩展完成，不使用 ctypes。公共工具只负责构建，不推�
 - [`12_map`](12_map/readme.md)：Go map 的键比较、共享、nil、浅复制和批量读取。
 - [`13_array`](13_array/readme.md)：定长数组的值复制、变量视图和取址。
 - [`14_func`](14_func/readme.md)：持有、调用和传回 Go 函数值，保留闭包状态。
-- 后续：带方法／命名 interface、callback 与并发等。
+- [`15_interface`](15_interface/readme.md)：GoInterface 公共基类、Go 接口方法调用、静态转换与动态断言，error 是普通接口值。
+- 后续：Python 实现 Go callback/interface 等。
 
 编号代表研究顺序。后续案例如暴露旧规则的问题，应先修正文档和黄金样例，再实现
 生成逻辑。当前公共构建约定可以随真实案例需要调整，不预先引入复杂的配置机制。

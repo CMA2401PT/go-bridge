@@ -12,16 +12,17 @@ import (
 type Shape string
 
 const (
-	Builtin        Shape = "builtin"
-	NamedValue     Shape = "named-value"
-	SliceObject    Shape = "slice"
-	StructObject   Shape = "struct"
-	PointerObject  Shape = "pointer"
-	AnyObject      Shape = "any"
-	ChannelObject  Shape = "channel"
-	MapObject      Shape = "map"
-	ArrayObject    Shape = "array"
-	CallableObject Shape = "callable"
+	Builtin         Shape = "builtin"
+	NamedValue      Shape = "named-value"
+	SliceObject     Shape = "slice"
+	StructObject    Shape = "struct"
+	PointerObject   Shape = "pointer"
+	AnyObject       Shape = "any"
+	ChannelObject   Shape = "channel"
+	MapObject       Shape = "map"
+	ArrayObject     Shape = "array"
+	CallableObject  Shape = "callable"
+	InterfaceObject Shape = "interface"
 )
 
 // Field contains a visible Go selector and its single shared Python spelling.
@@ -49,8 +50,14 @@ func shape(t *gomodel.Type) Shape {
 	case gomodel.Pointer:
 		return PointerObject
 	case gomodel.Interface:
-		return AnyObject
+		if t.Go.Underlying().(*types.Interface).Empty() {
+			return AnyObject
+		}
+		return InterfaceObject
 	case gomodel.Named:
+		if _, ok := t.Go.Underlying().(*types.Interface); ok {
+			return InterfaceObject
+		}
 		if t.Underlying == nil {
 			return StructObject
 		}
@@ -125,7 +132,7 @@ func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
 		switch t.Shape {
 		case StructObject, ArrayObject:
 			methods = t.Go.PointerMethods
-		case NamedValue, SliceObject, ChannelObject, MapObject, CallableObject:
+		case NamedValue, SliceObject, ChannelObject, MapObject, CallableObject, InterfaceObject:
 			methods = t.Go.ValueMethods
 		case PointerObject:
 			if t.Go.Kind == gomodel.Pointer {
@@ -177,7 +184,33 @@ func memberName(owner *Type, name string) string {
 // slice/pointer names. Distinct types with equal spellings are rejected later.
 func className(t *gomodel.Type) (string, error) {
 	if t.Kind == gomodel.Interface {
-		return "GoAny", nil
+		if t.Go.Underlying().(*types.Interface).Empty() {
+			return "GoAny", nil
+		}
+		var name strings.Builder
+		name.WriteString("Interface")
+		for _, m := range t.ValueMethods {
+			name.WriteString(m.Name)
+			for _, p := range m.Params {
+				stem, err := typeStem(p.Type)
+				if err != nil {
+					return "", err
+				}
+				name.WriteString(stem)
+			}
+			name.WriteString("To")
+			if len(m.Results) == 0 {
+				name.WriteString("Void")
+			}
+			for _, r := range m.Results {
+				stem, err := typeStem(r.Type)
+				if err != nil {
+					return "", err
+				}
+				name.WriteString(stem)
+			}
+		}
+		return name.String(), nil
 	}
 	if t.Kind == gomodel.Named {
 		return avoidKeyword(t.Name), nil

@@ -20,6 +20,8 @@ func bridgeAny(handle C.uintptr_t) any {
     if handle == 0 { return nil }
     return cgo.Handle(handle).Value()
 }
+//export BrInterfaceAsAny
+func BrInterfaceAsAny(handle C.uintptr_t) C.uintptr_t {return bridgePinAny(bridgeAny(handle))}
 func bridgePinAny(value any) C.uintptr_t {
     if value == nil { return 0 }
     return bridgePin(value)

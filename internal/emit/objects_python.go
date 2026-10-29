@@ -33,6 +33,9 @@ class Ptr(Ref, _typing.Generic[_Target]):
     def __bool__(self) -> _typing.Never: ...
 `)
 	}
+	if p.Any != nil {
+		fmt.Fprintf(b, "class GoInterface(Ref):\n    def as_any(self) -> %s: ...\n    @_builtins.property\n    def is_nil(self) -> _builtins.bool: ...\n    def __bool__(self) -> _typing.Never: ...\n", p.Any.Name)
+	}
 	conversions := make(map[*pyapi.Type]*pyapi.AnyConversion)
 	for _, c := range p.AnyConversions {
 		conversions[c.Type] = c
@@ -43,6 +46,8 @@ class Ptr(Ref, _typing.Generic[_Target]):
 		}
 		base := "Ref"
 		switch t.Shape {
+		case pyapi.AnyObject, pyapi.InterfaceObject:
+			base = "GoInterface"
 		case pyapi.NamedValue:
 			base = annotation(t.Underlying)
 		case pyapi.SliceObject:
@@ -51,7 +56,7 @@ class Ptr(Ref, _typing.Generic[_Target]):
 			base = fmt.Sprintf("Ptr[%q]", annotation(t.Elem))
 		}
 		fmt.Fprintf(b, "@_typing.final\nclass %s(%s):\n", t.Name, base)
-		if t.Shape == pyapi.AnyObject || t.Shape == pyapi.ChannelObject || t.Shape == pyapi.CallableObject {
+		if t.Shape == pyapi.AnyObject || t.Shape == pyapi.ChannelObject || t.Shape == pyapi.CallableObject || t.Shape == pyapi.InterfaceObject {
 			b.WriteString("    @_builtins.classmethod\n    def nil(cls) -> _typing.Self: ...\n    @_builtins.property\n    def is_nil(self) -> _builtins.bool: ...\n    def __bool__(self) -> _typing.Never: ...\n")
 		} else if t.Shape == pyapi.ArrayObject {
 			stubArray(b, t)
@@ -63,6 +68,9 @@ class Ptr(Ref, _typing.Generic[_Target]):
 		if t.Shape == pyapi.CallableObject && t.Underlying != nil {
 			stubValueConstructor(b, t)
 		}
+		if len(t.Implementors) > 0 {
+			stubInterfaceConstructor(b, t)
+		}
 		if t.Call != nil {
 			stubMethod(b, t.Call)
 		}
@@ -70,7 +78,7 @@ class Ptr(Ref, _typing.Generic[_Target]):
 			stubChannel(b, t)
 		}
 		if c := conversions[t]; c != nil {
-			fmt.Fprintf(b, "    def %[1]s(self) -> %[4]s: ...\n    @_builtins.classmethod\n    def %[2]s(cls, value: %[4]s) -> _typing.Self: ...\n    @_builtins.classmethod\n    def %[3]s(cls, value: %[4]s) -> _typing.Self | None: ...\n", c.Box, c.Assert, c.TryAssert, p.Any.Name)
+			fmt.Fprintf(b, "    def %[1]s(self) -> %[4]s: ...\n    @_builtins.classmethod\n    def %[2]s(cls, value: GoInterface) -> _typing.Self: ...\n    @_builtins.classmethod\n    def %[3]s(cls, value: GoInterface) -> _typing.Self | None: ...\n", c.Box, c.Assert, c.TryAssert, p.Any.Name)
 		}
 		if t.Underlying != nil {
 			fmt.Fprintf(b, "    def unname(self) -> %s: ...\n", annotation(t.Underlying))

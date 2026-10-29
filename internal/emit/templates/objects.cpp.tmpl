@@ -11,6 +11,7 @@ struct Ref {
 };
 struct Slice : Ref { using Ref::Ref; };
 struct Ptr : Ref { using Ref::Ref; };
+struct InterfaceRef : Ref { using Ref::Ref; };
 template<int ID, typename Base> struct GoObject : Base { using Base::Base; };
 
 // Python inputs must have the matching concrete Go wrapper type.

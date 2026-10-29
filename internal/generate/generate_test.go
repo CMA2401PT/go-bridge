@@ -137,7 +137,7 @@ func buildProject(t *testing.T, python, target, name string) string {
 	return out
 }
 
-func buildAndRun(t *testing.T, python, target, name, script string) {
+func buildAndRun(t *testing.T, python, target, name, script string) string {
 	t.Helper()
 	out := buildProject(t, python, target, name)
 	check := filepath.Join(out, "check.py")
@@ -146,6 +146,7 @@ func buildAndRun(t *testing.T, python, target, name, script string) {
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Python behavior: %v\n%s", err, output)
 	}
+	return out
 }
 
 func pythonLiteral(s string) string {

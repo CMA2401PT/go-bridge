@@ -20,7 +20,7 @@ func stubSource(p *pyapi.Package) string {
 	stubClasses(&b, p)
 	for _, c := range p.AnyConversions {
 		if c.Type.Shape == pyapi.Builtin {
-			fmt.Fprintf(&b, "def %[1]s(value: %[4]s) -> %[5]s: ...\ndef %[2]s(value: %[5]s) -> %[4]s: ...\ndef %[3]s(value: %[5]s) -> %[4]s | None: ...\n", c.Box, c.Assert, c.TryAssert, annotation(c.Type), p.Any.Name)
+			fmt.Fprintf(&b, "def %[1]s(value: %[4]s) -> %[5]s: ...\ndef %[2]s(value: GoInterface) -> %[4]s: ...\ndef %[3]s(value: GoInterface) -> %[4]s | None: ...\n", c.Box, c.Assert, c.TryAssert, annotation(c.Type), p.Any.Name)
 		}
 	}
 	for _, a := range p.Aliases {
@@ -58,6 +58,10 @@ func pythonSource(p *pyapi.Package) string {
 			fmt.Fprintf(&b, "from ._native import %s as %s\n", name, name)
 			exports = append(exports, name)
 		}
+	}
+	if p.Any != nil {
+		b.WriteString("from ._native import GoInterface as GoInterface\n")
+		exports = append(exports, "GoInterface")
 	}
 	for _, t := range p.Types {
 		if t.Shape != pyapi.Builtin {

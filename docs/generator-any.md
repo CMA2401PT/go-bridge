@@ -5,21 +5,22 @@
 ## 范围与公开接口
 
 any 和 interface{} 映射为同一个 GoAny 类型，真正 alias 重新导出该类型。
-只有静态类型闭包中存在空 interface 时，才生成 GoAny 和转换能力。
-命名 interface、带方法 interface、error 仍在 Go 分析阶段拒绝。
+静态类型闭包包含任意 interface 时，生成 GoAny 和转换能力。一般接口的行为见
+[接口包装与转换](generator-interface.md)。GoAny 和其他接口包装共同继承 GoInterface。
 
 基础类型每个 Go 类型生成三个模块函数：
 
 ```python
 def int_as_any(value: int) -> GoAny: ...
-def any_as_int(value: GoAny) -> int: ...
-def try_any_as_int(value: GoAny) -> int | None: ...
+def any_as_int(value: GoInterface) -> int: ...
+def try_any_as_int(value: GoInterface) -> int | None: ...
 ```
 
 bool、各宽度整数、uintptr、float32/float64、string 均提供相同形式。
 byte/rune 的 alias 使用 uint8/int32，不创造新的动态类型。其他已映射具体类型
-提供 as_any、from_any、try_from_any；包括命名标量、slice、struct、pointer 和 channel。
-GoAny 自身不提供这组三个转换。any 参数只接收 GoAny，不自动装箱。
+提供 as_any、from_any、try_from_any；包括命名标量、容器、struct、pointer、channel、函数值和一般接口。
+断言的输入统一为 GoInterface。GoAny 继承 as_any，返回持有同一动态值的新包装。
+普通 any 参数仍只接收 GoAny，不自动装箱。
 
 转换执行具体 Go 类型断言，不执行 Go 类型转换。MyInt 与 int、命名 slice 与
 底层 slice、命名 pointer 与底层 pointer、T 与 *T 都不能相互断言。
@@ -47,11 +48,13 @@ nil slice 同样保留动态类型和 nil 状态，slice 包装仍不提供 is_n
 | --- | --- |
 | 基础／命名标量 | 复制值，保留命名类型身份 |
 | slice／命名 slice | 复制头，共享数组；装箱恢复名字，取出后归一化 Cell |
-| struct T | 装箱复制 T，取出创建独立的可寻址变量；复制为浅复制 |
+| struct 或数组 T | 装箱复制 T，取出创建独立的可寻址变量；复制为浅复制 |
 | pointer／命名 pointer | 复制指针，共享目标；装箱恢复名字 |
 | channel／命名 channel | 共享 channel，保留方向和命名类型身份 |
+| map、函数值 | 共享 map 或闭包，保留命名类型身份 |
+| interface | 保留具体动态类型；不会把接口名字变成动态类型 |
 
-struct 的内部 Cell 是 *T，不能直接装箱该 Cell；必须装箱解引用后的 T。
+struct 和数组的内部 Cell 是 *T，不能直接装箱该 Cell；必须装箱解引用后的 T。
 any 字段 getter 复制当次 interface 值，setter 复制传入值。替换原字段不会改变
 之前读出的 GoAny；内部 pointer 和 slice 的共享关系仍保持。
 
@@ -61,18 +64,18 @@ any 字段 getter 复制当次 interface 值，setter 复制传入值。替换�
 
 ## 模型与输出路径
 
-- gomodel 的 Interface 节点仅表示空 interface，不追踪其可能的动态类型。
+- gomodel 收集 interface 的方法签名，不枚举其可能的动态实现者。
 - pyapi.AnyConversion 规划具体类型的公开转换名字，Package.Any 标识 GoAny。
 - abi.AnyConversion 规划 Box、Assert 和结果结构，不伪装成业务 Operation。
 - any 沿用 Handle 的 uintptr_t ABI，不增加新的传输 Kind。
 - emit/any_go.go 输出运行时和具体类型断言；emit/any_cpp.go 输出 Python 转换。
 
-每个具体类型仅有两个 Go 导出操作：Box(T) 返回 any 句柄；Assert(GoAny) 返回
+每个具体类型仅有两个 Go 导出操作：Box(T) 返回 any 句柄；Assert(GoInterface) 返回
 {ok, value}。普通和 try 形式共用 Assert，C++ 决定失败时抛 TypeError 或返回 None。
 命名标量取出的 Python 值仍是命名类；转换闭包用弱引用访问类，避免类持有自身。
 
-any 可以持有并传回闭包外的动态类型，包括私有类型、map 和匿名 struct。
-这不表示生成器支持这些类型作为静态 API，也不会生成它们的 Python 操作接口。
+any 可以持有并传回闭包外的动态类型，例如私有类型和匿名 struct。
+持有动态值不会自动为其具体类型生成 Python 操作接口。
 
 ## pointer 与 slice 组合
 
