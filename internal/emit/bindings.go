@@ -40,6 +40,9 @@ module.doc() = "Generated Go bindings";
 		cppRefClasses(&b)
 	}
 	cppClassTypes(&b, p)
+	for _, a := range p.Arrays {
+		cppArray(&b, a)
+	}
 	for _, m := range p.Maps {
 		cppMap(&b, m)
 	}

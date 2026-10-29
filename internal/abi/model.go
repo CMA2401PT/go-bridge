@@ -60,6 +60,7 @@ type Package struct {
 	Slices         []*Slice
 	Channels       []*Channel
 	Maps           []*Map
+	Arrays         []*Array
 	Types          []*Type
 	Classes        []*Class
 	Imports        []Import
@@ -94,6 +95,9 @@ func Plan(p *pyapi.Package) (*Package, error) {
 	}
 	for _, t := range p.Types {
 		w := wire[t]
+		if t.Shape == pyapi.ArrayObject {
+			result.Arrays = append(result.Arrays, planArray(t, wire))
+		}
 		if t.Shape == pyapi.MapObject {
 			result.Maps = append(result.Maps, planMap(t, wire))
 		}
@@ -146,7 +150,7 @@ func wireType(t *pyapi.Type, sizes types.Sizes, qualifier types.Qualifier) (*Typ
 		if t.Underlying != nil {
 			cell = t.Go.Go.Underlying()
 		}
-		if t.Shape == pyapi.StructObject {
+		if t.Variable() {
 			cell = types.NewPointer(t.Go.Go)
 		}
 		w.Cell = types.TypeString(cell, qualifier)

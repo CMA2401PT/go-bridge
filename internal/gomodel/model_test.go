@@ -170,7 +170,6 @@ func TestUnsupportedHasContext(t *testing.T) {
 		{`type Value interface{}`, "unsupported interface type"},
 		{`type Box struct { Data complex128 }`, "field Data: unsupported basic type complex128"},
 		{`func Bad() error { return nil }`, "result 1"},
-		{`func Bad(v [2]int) {}`, "unsupported type [2]int"},
 		{`func Bad(v func()) {}`, "unsupported type func()"},
 		{`func Bad(v struct{X int}) {}`, "unsupported type struct"},
 		{`type private int; func Bad() private { return 0 }`, "non-exported named type"},
@@ -221,8 +220,8 @@ func TestLoadExamples(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) != 12 {
-		t.Fatalf("expected 12 examples, got %d", len(paths))
+	if len(paths) != 13 {
+		t.Fatalf("expected 13 examples, got %d", len(paths))
 	}
 	for _, path := range paths {
 		t.Run(filepath.Base(path), func(t *testing.T) {

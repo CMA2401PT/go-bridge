@@ -85,7 +85,7 @@ func goPointerAccess(b *strings.Builder, c *abi.Class) {
 	t, e := c.Type, c.Elem
 	goExport(b, c.Load, "handle C.uintptr_t", e.C)
 	fmt.Fprintf(b, "pointer := %s\n", goInput(t, "handle"))
-	if e.Python.Shape == pyapi.StructObject {
+	if e.Python.Variable() {
 		// Loading *p must panic on nil even though a view only stores p.
 		fmt.Fprintf(b, "_ = *pointer\nout = bridgePin((%s)(pointer))\n", e.Cell)
 	} else {
@@ -104,7 +104,7 @@ func goField(b *strings.Builder, c *abi.Class, f *abi.Field) {
 	}
 	goExport(b, f.Get, "handle C.uintptr_t", f.Type.C)
 	fmt.Fprintf(b, "owner := %s\n", receiver)
-	if f.Type.Python.Shape == pyapi.StructObject {
+	if f.Type.Python.Variable() {
 		fmt.Fprintf(b, "out = bridgePin(&owner.%s)\n", f.Python.Go.Name)
 	} else {
 		fmt.Fprintf(b, "value := owner.%s\n", f.Python.Go.Name)

@@ -1,6 +1,6 @@
 # 生成器实施计划
 
-状态：M0–M9 已实现并通过本机验收，范围覆盖 examples 01–12。每完成一个可验证的阶段单独提交，下面的状态随代码更新。
+状态：M0–M10 已实现并通过本机验收，范围覆盖 examples 01–13。每完成一个可验证的阶段单独提交，下面的状态随代码更新。
 
 当前实现的分工、模型和关键代码路径见[维护文档导航](README.md)。实施计划负责记录
 目标与阶段进度；已实现机制的细节统一放在主题文档中。
@@ -11,7 +11,7 @@
 适配层、pybind11 C++ 绑定、Python package 和 `.pyi`。生成代码不要求逐字匹配
 `examples/expected/`，但复制、共享、类型检查和生命周期行为必须有测试依据。
 
-当前支持范围是 examples 01–12：
+当前支持范围是 examples 01–13：
 
 - bool、整数、浮点数、string；多返回值。
 - slice（含 bytes、嵌套 slice）、命名标量与命名 slice。
@@ -20,9 +20,10 @@
 - 带类型 nil；Go panic 不由桥接层恢复，未恢复的 panic 直接终止宿主进程。
 - any/interface{} 的显式装箱与断言、any 字段及 `*any`／`[]any` 组合。
 - channel 的三种方向、命名类型、同步 Python 接收回调和对象组合。
+- 定长数组的值复制、视图、取址、命名类型与容器组合。
 - map 的 Go 键比较、共享、浅复制、nil 和批量键值对读取。
 
-暂不支持命名／带方法 interface（含 error）、数组、函数值/callback、泛型
+暂不支持命名／带方法 interface（含 error）、函数值/callback、泛型
 和可变参数。包级变量、常量的导出另行设计，不沿用旧 gen 的变量导出接口。
 命名 bool 的 Python 表示尚未定义（bool 不能被继承），暂时明确拒绝。
 基础 bool 正常支持。complex、unsafe.Pointer 不在首版范围。
@@ -148,7 +149,7 @@ M3 使用 runtime/cgo.Handle 管理不透明整数句柄，未复用手写样例
 - [x] 资源管理涉及部分使用 cgocheck2/checkptr/race 进行针对性验证。
 - [x] 文档清楚区分已实现能力、已知限制与后续目标。
 
-验收命令、覆盖矩阵与未验证环境见 [01–12 验收](generator-acceptance.md)。
+验收命令、覆盖矩阵与未验证环境见 [01–13 验收](generator-acceptance.md)。
 
 ### M7：any 装箱与类型断言
 
@@ -179,6 +180,14 @@ M3 使用 runtime/cgo.Handle 管理不透明整数句柄，未复用手写样例
 - [x] 命名、递归 map 及 struct 键、指针键、any 键、指针/slice/channel/any 组合。
 
 接口语义和验证命令见 [12_map](../examples/12_map/readme.md)。
+
+### M10：定长数组
+
+- [x] 手写例子 13 和生成器覆盖定长构造、下标、取址、复制和批量读取。
+- [x] 命名、零长、嵌套数组及 struct/slice/map/channel/any 组合。
+- [x] 数组值复制；字段、元素和指针解引用保留变量视图。
+
+接口语义和验证命令见 [13_array](../examples/13_array/readme.md)。
 
 ## 工作与提交约定
 

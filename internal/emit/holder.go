@@ -19,7 +19,7 @@ func bridgePin[T any](value T) C.uintptr_t {
     bridgeRoots.Add(1)
     return C.uintptr_t(h)
 }
-func bridgeStruct[T any](value T) C.uintptr_t { return bridgePin(&value) }
+func bridgeVariable[T any](value T) C.uintptr_t { return bridgePin(&value) }
 func bridgeGet[T any](handle C.uintptr_t) T {
     return cgo.Handle(handle).Value().(T)
 }

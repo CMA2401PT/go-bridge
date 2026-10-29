@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | Basic | `Name`、`Go` | int、string |
 | Slice | `Elem` | `[]int` 指向 int 节点 |
+| Array | `Elem`、`Length` | `[N]T` 包含元素类型与固定长度 |
 | Map | `Key`、`Elem` | `map[K]V` 递归收集键和值类型 |
 | Channel | `Elem`、`Direction` | `chan T`、`chan<- T`、`<-chan T` |
 | Pointer | `Elem` | `**int` 指向 `*int` 节点 |

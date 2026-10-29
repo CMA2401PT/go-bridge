@@ -67,6 +67,9 @@ func goSource(p *abi.Package) string {
 	// An export is required even without API operations: cgo emits the header,
 	// and C++ can enter Go to wait for target package initialization.
 	fmt.Fprintf(&b, "\n//export %s\nfunc %s() {}\n", abi.InitSymbol, abi.InitSymbol)
+	for _, a := range p.Arrays {
+		goArray(&b, a)
+	}
 	for _, m := range p.Maps {
 		goMap(&b, m)
 	}
@@ -106,7 +109,7 @@ func goOperation(b *strings.Builder, op *abi.Operation) {
 	if op.Receiver != nil {
 		offset = 1
 		receiver := goInput(op.Receiver, "a0")
-		if op.Receiver.Python.Shape == pyapi.StructObject {
+		if op.Receiver.Python.Variable() {
 			receiver = "bridgeGet[" + op.Receiver.Cell + "](a0)"
 		}
 		target = "(" + receiver + ")." + op.Python.Go.Name
@@ -130,7 +133,7 @@ func goInput(t *abi.Type, value string) string {
 		switch t.Python.Shape {
 		case pyapi.AnyObject:
 			return "bridgeAny(" + value + ")"
-		case pyapi.StructObject:
+		case pyapi.StructObject, pyapi.ArrayObject:
 			return "*bridgeGet[" + t.Cell + "](" + value + ")"
 		case pyapi.PointerObject, pyapi.ChannelObject, pyapi.MapObject:
 			result = "bridgePointer[" + t.Cell + "](" + value + ")"
@@ -157,8 +160,8 @@ func goOutput(b *strings.Builder, t *abi.Type, field, value string) {
 		switch t.Python.Shape {
 		case pyapi.AnyObject:
 			fmt.Fprintf(b, "%s = bridgePinAny(%s)\n", field, value)
-		case pyapi.StructObject:
-			fmt.Fprintf(b, "%s = bridgeStruct(%s)\n", field, value)
+		case pyapi.StructObject, pyapi.ArrayObject:
+			fmt.Fprintf(b, "%s = bridgeVariable(%s)\n", field, value)
 		case pyapi.PointerObject, pyapi.ChannelObject, pyapi.MapObject:
 			fmt.Fprintf(b, "if (%s) != nil {%s = bridgePin((%s)(%s))}\n", value, field, t.Cell, value)
 		default:

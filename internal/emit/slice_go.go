@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"go-bridge/internal/abi"
-	"go-bridge/internal/pyapi"
 )
 
 // goSlice renders typed buffer transfer and ordinary Go slice operations.
@@ -25,7 +24,7 @@ func %[1]s(data *C.%[2]s, size C.size_t) C.uintptr_t {
 	}
 	fmt.Fprintf(b, "\n//export %s\nfunc %s(handle C.uintptr_t) C.size_t {return C.size_t(len(bridgeGet[%s](handle)))}\n", s.Len, s.Len, t.Cell)
 	goExport(b, s.At, "handle C.uintptr_t, index C.size_t", e.C)
-	if e.Python.Shape == pyapi.StructObject {
+	if e.Python.Variable() {
 		fmt.Fprintf(b, "value := bridgeGet[%s](handle)\nout = bridgePin(&value[int(index)])\n", t.Cell)
 	} else {
 		fmt.Fprintf(b, "value := bridgeGet[%s](handle)[int(index)]\n", t.Cell)

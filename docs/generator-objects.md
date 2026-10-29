@@ -44,9 +44,20 @@ Reslice/Clone/Copy 的符号、slice 和元素传输类型。Go/C++ 分别消费
 Go 适配层不 recover；非法内部句柄、Go 操作 panic 都直接终止进程。Python 输入检查
 和 C++ 资源释放仍保留，不将 Go panic 包装成可恢复异常。
 
+## 数组的复制与视图
+
+数组包装同 struct 一样持有变量地址。`ArrayNType()` 创建零值，传入 iterable 时必须
+恰好有 N 个元素。Python 层检查数量和下标，Go 层按固定长度读写 ABI 缓冲区。
+`copy_to_py_list()` 复制元素；`copy.copy()` 和命名数组转换复制整个数组值。
+
+字段、数组或 slice 元素、指针解引用返回数组视图。map 查找和普通函数返回数组副本。
+`addr()` 指向当前变量。`pyapi.Type.Variable()` 集中描述 struct/数组的变量语义，
+使字段、指针、函数和容器输出使用相同规则。数组操作由 `abi.Array` 与
+`array_go.go`、`array_cpp.go`、`array_python.go` 生成。
+
 ## 类型补全规则
 
-Go 模型只描述语言事实。Python 规划为 struct 的 addr() 补 *T；其他类型仅在闭包
+Go 模型只描述语言事实。Python 规划为 struct 和数组的 addr() 补 *T；其他类型仅在闭包
 已存在 *T 时提供 ptr()，不递归创造无限指针链。推广字段的可见性属于 Go 事实，
 由 gomodel 用 Go 选择器规则收集；Python 层只负责命名及冲突检查。
 
@@ -65,7 +76,7 @@ unname 共享目标。所有具体类禁止 Python 子类化，内建数值运�
 | --- | --- | --- |
 | 基础/命名标量 | 不使用 holder | 数值或 BrString |
 | 无名/命名 slice | 剥去最外层名字的 []E，保留元素身份 | 拥有的整数句柄 |
-| struct T | *T | 拥有的整数句柄 |
+| struct 或数组 T | *T | 拥有的整数句柄 |
 | 普通/多级指针 | 原指针类型 | 整数句柄；nil 为 0 |
 | 命名指针 | 剥去最外层名字的指针类型 | 整数句柄；nil 为 0 |
 
@@ -100,7 +111,7 @@ nil 返回值不创建 Go 持有关系。nil 接收者原样传给 Go，方法�
 
 当前未映射 Go 指针相等或 struct 值相等。Ref 的 Python 身份不等于 Go 目标地址，
 不要用两个包装对象的 == 判断它们是否指向同一 Go 对象；nil 使用 is_nil 判断。
-除 struct 的 copy.copy 外，deepcopy、pickle 和标量字段取地址也不在已实现协议内。
+除 struct 和数组的 copy.copy 外，deepcopy、pickle 和标量字段取地址也不在已实现协议内。
 
 ## 输出器入口
 

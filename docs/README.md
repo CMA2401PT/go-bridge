@@ -15,7 +15,7 @@
 | [channel 与回调](generator-channel.md) | channel 如何收发、限制方向，并在等待期间释放 GIL？ |
 | [ABI、所有权与异常](generator-runtime.md) | 数据如何过边界，字符串由谁释放，panic 和转换错误怎样传播？ |
 | [扩展、验证与排障](generator-maintenance.md) | 添加能力该改哪些地方，哪些测试能证明什么，失败时从哪里查？ |
-| [01–12 验收](generator-acceptance.md) | 哪些行为已经实测，怎样复现，哪些环境仍未验证？ |
+| [01–13 验收](generator-acceptance.md) | 哪些行为已经实测，怎样复现，哪些环境仍未验证？ |
 | [实施计划](generator-plan.md) | 已完成哪些阶段，剩下哪些工作？ |
 
 第一次读代码，先看分工，再顺着“一次生成与调用”中的函数入口阅读。准备修改某条
@@ -23,8 +23,8 @@
 
 ## 当前能力
 
-生成器已贯通 examples 01–12：基础 bool、整数、浮点数、string、真正 alias、
-函数和多返回值、字节和嵌套 slice，以及 map 的键比较、共享与批量读取。
+生成器已贯通 examples 01–13：基础 bool、整数、浮点数、string、真正 alias、
+函数和多返回值、字节和嵌套 slice，定长数组的值复制与视图，以及 map 的键比较、共享与批量读取。
 Go panic 不由桥接层捕获，未恢复的 panic 终止整个 Python 进程。named 类型、struct、
 字段/方法、普通/多级/命名指针与 typed nil 已通过 06–09 的原生测试。只有 alias 或没有公开声明的包也可构建导入，
 导入会通过内部初始化入口等待 Go init 完成。

@@ -89,7 +89,7 @@ func TestRoots(t *testing.T) {
   for j:=0;j<100;j++ {
    value:=&item{value:j}; value.next=value
    handle:=bridgePin(value)
-   copied:=bridgeStruct(*value)
+   copied:=bridgeVariable(*value)
    if bridgeGet[*item](copied).next!=value {t.Error("not a shallow copy")}
    BrRelease(copied)
    view:=bridgePin(&value.value)

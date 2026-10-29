@@ -20,6 +20,7 @@ const (
 	AnyObject     Shape = "any"
 	ChannelObject Shape = "channel"
 	MapObject     Shape = "map"
+	ArrayObject   Shape = "array"
 )
 
 // Field contains a visible Go selector and its single shared Python spelling.
@@ -36,6 +37,8 @@ func shape(t *gomodel.Type) Shape {
 		return Builtin
 	case gomodel.Slice:
 		return SliceObject
+	case gomodel.Array:
+		return ArrayObject
 	case gomodel.Map:
 		return MapObject
 	case gomodel.Channel:
@@ -53,6 +56,8 @@ func shape(t *gomodel.Type) Shape {
 			return NamedValue
 		case gomodel.Slice:
 			return SliceObject
+		case gomodel.Array:
+			return ArrayObject
 		case gomodel.Map:
 			return MapObject
 		case gomodel.Channel:
@@ -75,6 +80,7 @@ func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
 		}
 		t.Elem = mapped[base.Elem]
 		t.Key = mapped[base.Key]
+		t.Length = base.Length
 		if t.Shape == ChannelObject {
 			t.CanSend = base.Direction != types.RecvOnly
 			t.CanRecv = base.Direction != types.SendOnly
@@ -104,7 +110,7 @@ func planClasses(p *Package, mapped map[*gomodel.Type]*Type) error {
 	for _, t := range p.Types {
 		var methods []*gomodel.Function
 		switch t.Shape {
-		case StructObject:
+		case StructObject, ArrayObject:
 			methods = t.Go.PointerMethods
 		case NamedValue, SliceObject, ChannelObject, MapObject:
 			methods = t.Go.ValueMethods
@@ -163,6 +169,10 @@ func className(t *gomodel.Type) (string, error) {
 	if t.Kind == gomodel.Named {
 		return avoidKeyword(t.Name), nil
 	}
+	if t.Kind == gomodel.Array {
+		elem, err := typeStem(t.Elem)
+		return fmt.Sprintf("Array%d%s", t.Length, elem), err
+	}
 	if t.Kind == gomodel.Map {
 		key, err := typeStem(t.Key)
 		if err != nil {
@@ -217,3 +227,6 @@ var builtinMembers = map[string]string{
 	"float": "as_integer_ratio conjugate fromhex hex imag is_integer real from_number",
 	"str":   "capitalize casefold center count encode endswith expandtabs find format format_map index isalnum isalpha isascii isdecimal isdigit isidentifier islower isnumeric isprintable isspace istitle isupper join ljust lower lstrip maketrans partition removeprefix removesuffix replace rfind rindex rjust rpartition rsplit rstrip split splitlines startswith strip swapcase title translate upper zfill",
 }
+
+// Variable reports wrappers whose contents occupy addressable Go storage.
+func (t *Type) Variable() bool { return t.Shape == StructObject || t.Shape == ArrayObject }

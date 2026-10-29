@@ -33,6 +33,8 @@ func planClass(t *pyapi.Type, wire map[*pyapi.Type]*Type) *Class {
 	prefix := fmt.Sprintf("BrType%d", t.Go.ID)
 	if t.Shape == pyapi.StructObject {
 		c.New = prefix + "New"
+	}
+	if t.Variable() {
 		c.Copy = prefix + "Copy"
 		c.Address = prefix + "Address"
 	}
@@ -45,7 +47,7 @@ func planClass(t *pyapi.Type, wire map[*pyapi.Type]*Type) *Class {
 		c.New = prefix + "Convert"
 		c.Unname = prefix + "Unname"
 	}
-	if t.Pointer != nil && t.Shape != pyapi.StructObject {
+	if t.Pointer != nil && !t.Variable() {
 		c.ToPointer = prefix + "Pointer"
 	}
 	for i, f := range t.Fields {

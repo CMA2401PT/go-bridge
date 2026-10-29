@@ -20,6 +20,7 @@ const (
 	Slice     Kind = "slice"
 	Channel   Kind = "channel"
 	Map       Kind = "map"
+	Array     Kind = "array"
 	Pointer   Kind = "pointer"
 	Interface Kind = "interface"
 )
@@ -39,6 +40,7 @@ type Type struct {
 
 	Underlying *Type         // Named non-struct only
 	Elem       *Type         // Slice, Pointer or Channel
+	Length     int64         // Array only
 	Key        *Type         // Map key
 	Direction  types.ChanDir // Channel only
 	Fields     []Field       // Named struct only: direct exported fields
