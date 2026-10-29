@@ -73,20 +73,41 @@ struct Ref {
     Ref(Ref&& other) noexcept : handle(std::exchange(other.handle, 0)) {}
     ~Ref() { BrRelease(handle); }
 };
-struct Counter : Ref {using Ref::Ref;};
-struct ErrorValue : Ref {using Ref::Ref;};
+struct InterfaceRef : Ref {using Ref::Ref;};
+struct GoAny : InterfaceRef {using InterfaceRef::InterfaceRef;};
+struct Counter : InterfaceRef {using InterfaceRef::InterfaceRef;};
+struct ErrorValue : InterfaceRef {using InterfaceRef::InterfaceRef;};
+// The result owns a handle before Python allocation can fail.
+template<class T, BrAssertion (*Assert)(uintptr_t)>
+py::object assert_value(const InterfaceRef& value,bool optional) {
+ auto result=Assert(value.handle);
+ T owned(result.value);
+ if (!result.ok) {
+  if (optional) return py::none();
+  throw py::type_error("Go interface does not satisfy the requested type");
+ }
+ return py::cast(std::move(owned));
+}
 struct StringOwner {BrString value;~StringOwner(){std::free(value.data);}};
 PYBIND11_MODULE(_native,m) {
  py::class_<Ref>(m,"Ref");
- py::class_<Counter,Ref>(m,"Counter",py::is_final())
+ py::class_<InterfaceRef,Ref>(m,"GoInterface")
+ .def_property_readonly("is_nil",[](const InterfaceRef& value){return value.handle==0;})
+ .def("__bool__",[](const InterfaceRef&)->bool{throw py::type_error("Go interfaces have no truth value; use is_nil");})
+ .def("as_any",[](const InterfaceRef& value){return GoAny(BrBox(value.handle));});
+ py::class_<GoAny,InterfaceRef>(m,"GoAny",py::is_final())
+ .def_static("nil",[]{return GoAny(0);});
+ py::class_<Counter,InterfaceRef>(m,"Counter",py::is_final())
+ .def(py::init([](const Counter& value){return Counter(BrBox(value.handle));}),py::arg("value"))
+ .def_static("from_any",[](const InterfaceRef& value){return assert_value<Counter,BrAssertCounter>(value,false);},py::arg("value"))
+ .def_static("try_from_any",[](const InterfaceRef& value){return assert_value<Counter,BrAssertCounter>(value,true);},py::arg("value"))
  .def_static("nil",[]{return Counter(0);})
- .def_property_readonly("is_nil",[](const Counter& value){return value.handle==0;})
- .def("__bool__",[](const Counter&) -> bool {throw py::type_error("Go interfaces have no truth value; use is_nil");})
  .def("add",[](const Counter& value,py::handle arg1){auto n=integer_arg<intptr_t>(arg1);py::gil_scoped_release release;return BrAdd(value.handle,n);},py::arg("arg1"));
- py::class_<ErrorValue,Ref>(m,"error",py::is_final())
+ py::class_<ErrorValue,InterfaceRef>(m,"error",py::is_final())
+ .def(py::init([](const ErrorValue& value){return ErrorValue(BrBox(value.handle));}),py::arg("value"))
+ .def_static("from_any",[](const InterfaceRef& value){return assert_value<ErrorValue,BrAssertError>(value,false);},py::arg("value"))
+ .def_static("try_from_any",[](const InterfaceRef& value){return assert_value<ErrorValue,BrAssertError>(value,true);},py::arg("value"))
  .def_static("nil",[]{return ErrorValue(0);})
- .def_property_readonly("is_nil",[](const ErrorValue& value){return value.handle==0;})
- .def("__bool__",[](const ErrorValue&) -> bool {throw py::type_error("Go interfaces have no truth value; use is_nil");})
  .def("error",[](const ErrorValue& value){StringOwner owner{[&]{py::gil_scoped_release release;return BrError(value.handle);}()};return decode(owner.value);});
  m.def("new",[](py::handle start){auto n=integer_arg<intptr_t>(start);py::gil_scoped_release release;return Counter(BrNew(n));},py::arg("start"));
  m.def("echo",[](const Counter& value){py::gil_scoped_release release;return Counter(BrEcho(value.handle));},py::arg("value"));

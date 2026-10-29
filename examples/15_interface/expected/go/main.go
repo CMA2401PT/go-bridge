@@ -6,6 +6,7 @@ package main
 #include <stdlib.h>
 typedef struct {char *data;size_t size;} BrString;
 typedef struct {intptr_t value;uintptr_t error;} BrResult;
+typedef struct {uint8_t ok;uintptr_t value;} BrAssertion;
 */
 import "C"
 import api "go-bridge/examples/15_interface"
@@ -46,3 +47,26 @@ func BrError(handle C.uintptr_t) C.BrString {
 	return C.BrString{data: C.CString(v), size: C.size_t(len(v))}
 }
 func main() {}
+
+//export BrBox
+func BrBox(handle C.uintptr_t) C.uintptr_t { return pin(bridgePointer[any](handle)) }
+
+//export BrAssertCounter
+func BrAssertCounter(handle C.uintptr_t) (out C.BrAssertion) {
+	value, ok := bridgePointer[any](handle).(api.Counter)
+	if ok {
+		out.ok = 1
+		out.value = pin(value)
+	}
+	return
+}
+
+//export BrAssertError
+func BrAssertError(handle C.uintptr_t) (out C.BrAssertion) {
+	value, ok := bridgePointer[any](handle).(error)
+	if ok {
+		out.ok = 1
+		out.value = pin(value)
+	}
+	return
+}
