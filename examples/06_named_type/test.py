@@ -288,6 +288,12 @@ class StructTests(Holders):
             bridge.MyNamedStruct(named_ref_member_value=bridge.MyNamedAnomySubStruct())  # type: ignore[arg-type]
         with self.assertRaises(TypeError):
             bridge.MyNamedStruct(unknown=1)  # type: ignore[call-arg]
+        with self.assertRaises(TypeError):
+            bridge.MyNamedStruct(my_named_anomy_sub_struct=None)  # type: ignore[arg-type]
+        with self.assertRaises(TypeError):
+            bridge.MyNamedStruct(ref_member_value=None)  # type: ignore[arg-type]
+        with self.assertRaises(TypeError):
+            bridge.MyNamedStruct(named_ref_member_value=None)  # type: ignore[arg-type]
         self.assertEqual(self.holders(), 0)  # A failed constructor pins nothing.
 
     def test_public_surface(self) -> None:

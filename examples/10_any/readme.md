@@ -17,9 +17,12 @@ MYPYPATH=examples/.build/10_any/python mypy examples/10_any/test.py --strict
 
 ## Python API
 
-`GoAny(Ref)` 持有一个不可直接修改的 Go interface 值。它与 `typing.Any` 无关；
-`Ref` 只负责句柄所有权，不提供通用装箱，也不公开原始句柄。`any` 参数只接受
-`GoAny`，返回值始终为 `GoAny`，不根据动态类型自动转换为 Python 值。
+`GoAny` 持有一个不可直接修改的 Go interface 值，与 `typing.Any` 无关。
+它继承接口公共基类 `GoInterface`，后者继承负责句柄所有权的 `Ref`。
+`GoInterface` 提供 `is_nil`、拒绝 bool 判断，以及复制接口包装的 `as_any()`；
+`GoAny` 另外提供 `nil()`，且不能被继承。普通 Go `any` 参数只接受 `GoAny`，
+返回值始终为 `GoAny`，不根据动态类型自动转换为 Python 值。
+动态类型断言接受 `GoInterface`，与 [15_interface](../15_interface/readme.md) 的接口包装共用这套规则。
 
 ```python
 import go_any as bridge
@@ -43,8 +46,8 @@ assert s.copy_to_py_list() == [3, 2]
 
 ```python
 def int_as_any(value: int) -> GoAny: ...
-def any_as_int(value: GoAny) -> int: ...
-def try_any_as_int(value: GoAny) -> int | None: ...
+def any_as_int(value: GoInterface) -> int: ...
+def try_any_as_int(value: GoInterface) -> int | None: ...
 ```
 
 覆盖 `int`、`uint`、`uintptr`、所有 8/16/32/64 位整数、`float32`、`float64`、
@@ -62,15 +65,15 @@ def try_any_as_int(value: GoAny) -> int | None: ...
 ```python
 def as_any(self) -> GoAny: ...
 @classmethod
-def from_any(cls, value: GoAny) -> Self: ...
+def from_any(cls, value: GoInterface) -> Self: ...
 @classmethod
-def try_from_any(cls, value: GoAny) -> Self | None: ...
+def try_from_any(cls, value: GoInterface) -> Self | None: ...
 ```
 
 本例验证 `MyInt`、`SliceInt`、`MySlice`、`Point`、`PtrInt`、`PtrPoint`、
 `PtrPtrInt` 与命名指针 `IntPtr`。转换实现属于各具体类型；不能让通用 Ref
-根据 holder 的内部表示推测 Go 类型。GoAny 已经是 any 包装，不再给它提供这组三个
-转换方法；它可直接作为 any 参数传入。
+根据 holder 的内部表示推测 Go 类型。GoAny 可直接作为 any 参数传入，也可通过
+继承的 `as_any()` 得到独立包装；复制保留动态类型和值，不把 interface 再嵌套一层。
 
 ## 类型断言和失败边界
 
@@ -81,7 +84,7 @@ def try_from_any(cls, value: GoAny) -> Self | None: ...
 - `any_as_*()`／`T.from_any()`：不匹配时抛 `TypeError`。
 - `try_any_as_*()`／`T.try_from_any()`：不匹配时返回 `None`，失败不创建句柄。
 - 匹配时返回转换后的值；`0`、`False`、空字符串和带类型 nil 都是成功结果。
-- 两种形式都拒绝不属于 GoAny 的参数，包括 Python `None`。
+- 两种形式都拒绝不属于 GoInterface 的参数，包括 Python `None`。
 - `try` 只处理类型断言失败。成功断言为 string 后的 UTF-8 解码错误仍抛
   `UnicodeDecodeError`；它不捕获 Python 转换异常，也不恢复 Go panic。
 
@@ -165,8 +168,8 @@ anyCell 包装。装箱前恢复原 Go 类型，取出后再转为既有 Cell：
 Cell 是 `[]int`，装箱须先还原 MySlice；IntPtr 的 Cell 是 `*int`，装箱须先还原
 IntPtr。any 内部不能剥去命名类型身份。
 
-Python 入口检查参数是否为 GoAny；调用者通过公开接口构造对象。Go 侧不额外检查
-any 句柄的类别。
+普通 any 参数入口要求 GoAny，动态断言入口要求 GoInterface。调用者通过公开接口
+构造对象；Go 侧不额外检查 any 句柄的类别。
 
 输入句柄借用；每次成功装箱、非 nil any 返回、非 nil 对象取出均创建独立句柄。
 GoAny 不借用来源 Ref 的句柄，来源释放后仍有效；取出的对象也能在 GoAny 释放后
@@ -182,7 +185,7 @@ any 不提供动态类型枚举，也不扩展类型闭包。其他具体类型�
 参数、结果和字段等依赖中得到；只能为已经生成的具体类型提供对象转换方法。
 基础值转换函数按本例列出的 Go 基础类型提供。
 
-Go 返回的 any 可以保存闭包外的动态类型，包括未导出的类型或尚未映射的 map。
+Go 返回的 any 可以保存闭包外的动态类型，包括未导出的类型或未进入本模块类型闭包的 map。
 本例 `unknown()` 返回装有 `map[string]int` 的 GoAny；Python 能持有、传给 echo
 或 unknown_value，不能因此构造或操作 Python map 包装。
 

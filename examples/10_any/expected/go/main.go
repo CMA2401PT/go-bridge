@@ -481,6 +481,11 @@ func BrPtrPointStore(handle, value C.uintptr_t) {
 	*bridgePointer[*api.Point](handle) = *bridgeGet[*api.Point](value)
 }
 
+//export BrInterfaceAsAny
+func BrInterfaceAsAny(handle C.uintptr_t) C.uintptr_t {
+	return bridgePinAny(bridgeAny(handle))
+}
+
 //export BrEcho
 func BrEcho(handle C.uintptr_t) C.uintptr_t { return bridgePinAny(api.Echo(bridgeAny(handle))) }
 

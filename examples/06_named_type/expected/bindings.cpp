@@ -211,11 +211,6 @@ protected:
     using Ref::Ref;
 };
 
-template <class T>
-uintptr_t optional_handle(py::handle value, const char* expected) {
-    return value.is_none() ? 0 : wrapper_arg<T>(value, expected).handle();
-}
-
 // MyNamedSubStruct and *MyNamedSubStruct.
 
 template <class Base>
@@ -402,19 +397,26 @@ public:
     explicit MyNamedStruct(uintptr_t id) : MyNamedStructMembers(id) {}
     MyNamedStruct(MyNamedStruct&&) noexcept = default;
 
-    static MyNamedStruct create(py::handle my_named_anomy_sub_struct,
-                                py::handle basic_member_value,
-                                py::handle ref_member_value,
-                                py::handle named_basic_member_value,
-                                py::handle named_ref_member_value) {
-        // Convert everything before calling Go, so a bad argument creates nothing.
-        const auto anomy = optional_handle<MyNamedAnomySubStruct>(
-            my_named_anomy_sub_struct, "MyNamedAnomySubStruct");
-        const auto basic = go_int(basic_member_value);
-        const auto ref = optional_handle<SliceInt>(ref_member_value, "SliceInt");
-        const auto named_basic = my_named_non_struct_int_value(named_basic_member_value);
-        const auto named_ref = optional_handle<MyNamedSubStruct>(
-            named_ref_member_value, "MyNamedSubStruct");
+    static MyNamedStruct create(py::kwargs args) {
+        uintptr_t anomy = 0, ref = 0, named_ref = 0;
+        intptr_t basic = 0, named_basic = 0;
+        for (auto entry : args) {
+            const auto name = py::cast<std::string>(entry.first);
+            const auto value = entry.second;
+            if (name == "my_named_anomy_sub_struct") {
+                anomy = wrapper_arg<MyNamedAnomySubStruct>(value, "MyNamedAnomySubStruct").handle();
+            } else if (name == "basic_member_value") {
+                basic = go_int(value);
+            } else if (name == "ref_member_value") {
+                ref = wrapper_arg<SliceInt>(value, "SliceInt").handle();
+            } else if (name == "named_basic_member_value") {
+                named_basic = my_named_non_struct_int_value(value);
+            } else if (name == "named_ref_member_value") {
+                named_ref = wrapper_arg<MyNamedSubStruct>(value, "MyNamedSubStruct").handle();
+            } else {
+                throw py::type_error("unexpected MyNamedStruct constructor keyword: " + name);
+            }
+        }
         return MyNamedStruct(BrNewMyNamedStruct(anomy, basic, ref, named_basic, named_ref));
     }
     MyNamedStruct copy() const { return MyNamedStruct(BrMyNamedStructCopy(handle())); }
@@ -550,12 +552,7 @@ PYBIND11_MODULE(_native, module) {
     def_my_named_anomy_sub_struct_members(ptr_anomy);
 
     py::class_<MyNamedStruct, Ref> named(module, "MyNamedStruct");
-    named.def(py::init(&MyNamedStruct::create), py::kw_only(),
-              py::arg("my_named_anomy_sub_struct") = py::none(),
-              py::arg("basic_member_value") = 0,
-              py::arg("ref_member_value") = py::none(),
-              py::arg("named_basic_member_value") = named_int(0),
-              py::arg("named_ref_member_value") = py::none())
+    named.def(py::init(&MyNamedStruct::create))
         .def("__copy__", &MyNamedStruct::copy)
         .def("addr", &MyNamedStruct::addr);
     def_my_named_struct_members(named);

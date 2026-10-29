@@ -94,20 +94,20 @@ class MyNamedStruct(Ref):
     def __new__(
         cls,
         *,
-        my_named_anomy_sub_struct: MyNamedAnomySubStruct | None = None,
+        my_named_anomy_sub_struct: MyNamedAnomySubStruct = ...,
         basic_member_value: int = 0,
-        ref_member_value: SliceInt | None = None,
+        ref_member_value: SliceInt = ...,
         named_basic_member_value: MyNamedNonStructInt = ...,
-        named_ref_member_value: MyNamedSubStruct | None = None,
+        named_ref_member_value: MyNamedSubStruct = ...,
     ) -> MyNamedStruct: ...
     def __init__(
         self,
         *,
-        my_named_anomy_sub_struct: MyNamedAnomySubStruct | None = None,
+        my_named_anomy_sub_struct: MyNamedAnomySubStruct = ...,
         basic_member_value: int = 0,
-        ref_member_value: SliceInt | None = None,
+        ref_member_value: SliceInt = ...,
         named_basic_member_value: MyNamedNonStructInt = ...,
-        named_ref_member_value: MyNamedSubStruct | None = None,
+        named_ref_member_value: MyNamedSubStruct = ...,
     ) -> None: ...
     def __copy__(self) -> MyNamedStruct: ...
     def addr(self) -> PtrMyNamedStruct: ...

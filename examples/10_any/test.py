@@ -34,6 +34,27 @@ class Holders(unittest.TestCase):
         return int(_native._holder_count()) - self.baseline
 
 
+class InterfaceTests(Holders):
+    def test_interface_copy_preserves_type_and_lifetime(self) -> None:
+        original: bridge.GoInterface = bridge.int_as_any(value=42)
+        self.assertIsInstance(original, bridge.Ref)
+        self.assertEqual(bridge.any_as_int(value=original), 42)
+        copied = original.as_any()
+        assert_type(copied, bridge.GoAny)
+        self.assertIsNot(copied, original)
+        del original
+        gc.collect()
+        self.assertEqual(bridge.any_as_int(value=copied), 42)
+        self.assertIsNone(bridge.try_any_as_string(value=copied))
+
+        nil: bridge.GoInterface = bridge.GoAny.nil()
+        self.assertTrue(nil.as_any().is_nil)
+        typed_nil: bridge.GoInterface = bridge.PtrInt.nil().as_any()
+        copied_nil = typed_nil.as_any()
+        self.assertFalse(copied_nil.is_nil)
+        self.assertTrue(bridge.PtrInt.from_any(value=copied_nil).is_nil)
+
+
 class ScalarTests(Holders):
     def test_every_scalar_retains_its_go_type(self) -> None:
         cases: list[tuple[str, Any]] = [

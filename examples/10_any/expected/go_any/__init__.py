@@ -4,6 +4,7 @@ from types import GenericAlias
 from . import _native
 from ._native import (
     GoAny,
+    GoInterface,
     Ref,
     Slice,
     Ptr,
@@ -99,11 +100,11 @@ class MyInt(int):
         return _native._my_int_as_any(self)
 
     @classmethod
-    def from_any(cls, value: GoAny) -> "MyInt":
+    def from_any(cls, value: GoInterface) -> "MyInt":
         return cls(_native._any_as_my_int(value))
 
     @classmethod
-    def try_from_any(cls, value: GoAny) -> "MyInt | None":
+    def try_from_any(cls, value: GoInterface) -> "MyInt | None":
         result = _native._try_any_as_my_int(value)
         return None if result is None else cls(result)
 
@@ -116,6 +117,7 @@ def echo_my_int(value: MyInt) -> MyInt:
 
 __all__ = [
     "GoAny",
+    "GoInterface",
     "Ref",
     "Slice",
     "Ptr",

@@ -33,5 +33,5 @@ python examples/build.py 12_map --test
 MYPYPATH=examples/.build/12_map/python python -m mypy examples/12_map/test.py --strict
 ```
 
-手写样例验证 string→int 的复制、共享、重复键、缺键、nil 和句柄释放。生成器需要
+手写样例验证 string→int 的复制、共享、重复键、缺键、nil 和句柄释放。生成器
 递归收集键和值类型，为命名 map、字段、指针、slice、channel 和 any 组合复用该协议。

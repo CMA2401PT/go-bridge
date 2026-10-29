@@ -177,6 +177,8 @@ class StructPtrTests(Holders):
         self.assertEqual(bridge.Box().echo(), "box: {0 {0}}")
         with self.assertRaises(TypeError):
             bridge.Box(count=1)  # type: ignore[arg-type]
+        with self.assertRaises(TypeError):
+            bridge.Box(inner=None)  # type: ignore[arg-type]
 
     def test_pointer_to_struct_pointer(self) -> None:
         box = bridge.Box()

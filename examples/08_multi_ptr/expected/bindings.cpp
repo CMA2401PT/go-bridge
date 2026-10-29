@@ -252,10 +252,19 @@ public:
     explicit Box(uintptr_t id) : BoxMembers(id) {}
     Box(Box&&) noexcept = default;
 
-    static Box create(py::handle count, py::handle inner) {
-        const auto count_value = counter_value(count);
-        const auto inner_handle =
-            inner.is_none() ? 0 : wrapper_arg<Inner>(inner, "Inner").handle();
+    static Box create(py::kwargs args) {
+        intptr_t count_value = 0;
+        uintptr_t inner_handle = 0;
+        for (auto entry : args) {
+            const auto name = py::cast<std::string>(entry.first);
+            if (name == "count") {
+                count_value = counter_value(entry.second);
+            } else if (name == "inner") {
+                inner_handle = wrapper_arg<Inner>(entry.second, "Inner").handle();
+            } else {
+                throw py::type_error("unexpected Box constructor keyword: " + name);
+            }
+        }
         return Box(BrNewBox(count_value, inner_handle));
     }
     PtrBox addr() const;
@@ -354,8 +363,7 @@ PYBIND11_MODULE(_native, module) {
     def_inner_members(ptr_inner);
 
     py::class_<Box, Ref> box(module, "Box");
-    box.def(py::init(&Box::create), py::kw_only(), py::arg("count") = counter_class(0),
-            py::arg("inner") = py::none())
+    box.def(py::init(&Box::create))
         .def("addr", &Box::addr);
     def_box_members(box);
     py::class_<PtrBox, Ptr> ptr_box(module, "PtrBox");

@@ -1,6 +1,8 @@
-from typing import Self, Never
-class FuncIntToInt:
+from typing import Self, Never, final
+class Ref:
     def __new__(cls, _handle: Never) -> Self: ...
+@final
+class FuncIntToInt(Ref):
     @classmethod
     def nil(cls) -> Self: ...
     @property

@@ -32,7 +32,8 @@ class InterfaceTests(unittest.TestCase):
         self.assertFalse(value.is_nil)
         self.assertEqual(value.add(arg1=1), -1)
     def test_interface_conversions(self) -> None:
-        value = bridge.new(start=1)
+        value: bridge.GoInterface = bridge.new(start=1)
+        self.assertIsInstance(value, bridge.Ref)
         boxed = value.as_any()
         self.assertIsInstance(boxed, bridge.GoAny)
         self.assertEqual(bridge.Counter.from_any(value=boxed).add(arg1=2), 3)

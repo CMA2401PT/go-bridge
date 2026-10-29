@@ -70,8 +70,8 @@ inline py::str decode(BrString value) {
 
 namespace {
 
-// Same opaque-handle ownership and initialized-holder checks as the current
-// generator. No native handle or address is exposed through Python.
+// Same opaque-handle ownership as the current generator.
+// No native handle or address is exposed through Python.
 struct Ref {
     uintptr_t handle;
     explicit Ref(uintptr_t value) : handle(value) {}
@@ -80,10 +80,11 @@ struct Ref {
     Ref(Ref&& other) noexcept : handle(std::exchange(other.handle, 0)) {}
     ~Ref() { BrRelease(handle); }
 };
+struct InterfaceRef : Ref { using Ref::Ref; };
 struct Slice : Ref { using Ref::Ref; };
 struct Ptr : Ref { using Ref::Ref; };
 template<int ID, class Base> struct GoObject : Base { using Base::Base; };
-using GoAny = GoObject<0, Ref>;
+using GoAny = GoObject<0, InterfaceRef>;
 using SliceInt = GoObject<1, Slice>;
 using MySlice = GoObject<2, Slice>;
 using Point = GoObject<3, Ref>;
@@ -126,10 +127,10 @@ template<class T, class Class>
 void define_any(Class& cls, uintptr_t (*box)(uintptr_t), BrHandleResult (*unbox)(uintptr_t), const char* type) {
     cls.def("as_any", [box](py::handle self) { return wrap<GoAny>(box(handle_arg<T>(self))); });
     cls.def_static("from_any", [unbox, type](py::handle value) {
-        return asserted(unbox(handle_arg<GoAny>(value)), false, type, &wrap<T>);
+        return asserted(unbox(handle_arg<InterfaceRef>(value)), false, type, &wrap<T>);
     }, py::arg("value"));
     cls.def_static("try_from_any", [unbox, type](py::handle value) {
-        return asserted(unbox(handle_arg<GoAny>(value)), true, type, &wrap<T>);
+        return asserted(unbox(handle_arg<InterfaceRef>(value)), true, type, &wrap<T>);
     }, py::arg("value"));
 }
 
@@ -145,10 +146,10 @@ void define_scalar(py::module_& module, const std::string& type, uintptr_t (*box
         return wrap<GoAny>(box(input(value)));
     }, py::arg("value"));
     module.def(("any_as_" + type).c_str(), [unbox, type, convert](py::handle value) {
-        return asserted(unbox(handle_arg<GoAny>(value)), false, type.c_str(), convert);
+        return asserted(unbox(handle_arg<InterfaceRef>(value)), false, type.c_str(), convert);
     }, py::arg("value"));
     module.def(("try_any_as_" + type).c_str(), [unbox, type, convert](py::handle value) {
-        return asserted(unbox(handle_arg<GoAny>(value)), true, type.c_str(), convert);
+        return asserted(unbox(handle_arg<InterfaceRef>(value)), true, type.c_str(), convert);
     }, py::arg("value"));
 }
 
@@ -231,7 +232,15 @@ PYBIND11_MODULE(_native, module) {
     py::class_<Ref>(module, "Ref");
     py::class_<Slice, Ref>(module, "Slice");
     py::class_<Ptr, Ref>(module, "Ptr");
-    py::class_<GoAny, Ref> any(module, "GoAny", py::is_final());
+    py::class_<InterfaceRef, Ref>(module, "GoInterface")
+       .def_property_readonly("is_nil", [](const InterfaceRef& value) { return value.handle == 0; })
+       .def("__bool__", [](const InterfaceRef&) -> bool {
+           throw py::type_error("use is_nil to test a Go nil value");
+       })
+       .def("as_any", [](const InterfaceRef& value) {
+           return wrap<GoAny>(BrInterfaceAsAny(value.handle));
+       });
+    py::class_<GoAny, InterfaceRef> any(module, "GoAny", py::is_final());
     py::class_<SliceInt, Slice> slice(module, "SliceInt", py::is_final());
     py::class_<MySlice, Slice> named_slice(module, "MySlice", py::is_final());
     py::class_<Point, Ref> point(module, "Point", py::is_final());
@@ -239,7 +248,7 @@ PYBIND11_MODULE(_native, module) {
     py::class_<PtrPoint, Ptr> point_ptr(module, "PtrPoint", py::is_final());
     py::class_<PtrPtrInt, Ptr> double_ptr(module, "PtrPtrInt", py::is_final());
     py::class_<IntPtr, Ptr> named_ptr(module, "IntPtr", py::is_final());
-    define_nil<GoAny>(any);
+    any.def_static("nil", [] { return GoAny(0); });
     define_nil<PtrInt>(int_ptr);
     define_nil<PtrPoint>(point_ptr);
     define_nil<PtrPtrInt>(double_ptr);
@@ -306,10 +315,10 @@ PYBIND11_MODULE(_native, module) {
     module.def("_check_int", &integer_arg<intptr_t>);
     module.def("_my_int_as_any", [](py::handle value) { return wrap<GoAny>(BrMyIntAsAny(integer_arg<intptr_t>(value))); });
     module.def("_any_as_my_int", [](py::handle value) {
-        return asserted(BrTryAnyAsMyInt(handle_arg<GoAny>(value)), false, "anyvalue.MyInt", as_int);
+        return asserted(BrTryAnyAsMyInt(handle_arg<InterfaceRef>(value)), false, "anyvalue.MyInt", as_int);
     });
     module.def("_try_any_as_my_int", [](py::handle value) {
-        return asserted(BrTryAnyAsMyInt(handle_arg<GoAny>(value)), true, "anyvalue.MyInt", as_int);
+        return asserted(BrTryAnyAsMyInt(handle_arg<InterfaceRef>(value)), true, "anyvalue.MyInt", as_int);
     });
     define_scalar(module, "int", &BrIntAsAny, &BrTryAnyAsInt, &integer_arg<intptr_t>, as_int);
     define_scalar(module, "int8", &BrInt8AsAny, &BrTryAnyAsInt8, &integer_arg<int8_t>, as_int);

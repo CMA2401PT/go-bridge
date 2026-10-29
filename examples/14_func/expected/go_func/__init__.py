@@ -1,1 +1,1 @@
-from ._native import FuncIntToInt, counter, apply, echo, nil
+from ._native import Ref, FuncIntToInt, counter, apply, echo, nil

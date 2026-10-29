@@ -118,7 +118,8 @@ struct 包装对象继承 Ref，是一个类型为 `T` 的 Go 变量。Go 侧 **
 literal `MyNamedStruct{BasicMemberValue: 1}`：省略的字段就是 Go 零值（零 struct、
 nil slice、0）。这样字段顺序变化不会静默改变调用含义，大 struct 也不必逐个填写。
 参数按 ABI 表示传入：标量传值，struct 与 slice 传句柄，省略的句柄参数为 0，
-Go 侧保持零值。所有参数先在 C++ 中转换，任一失败都不会调用 Go 或创建句柄。
+Go 侧保持零值。显式传入的 struct 和 slice 必须是对应包装，None 不表示省略。
+所有参数先在 C++ 中转换，任一失败都不会调用 Go 或创建句柄。
 
 构造时 struct 参数被**复制**进新值（Go 中把 struct 值放进字面量同样是复制），
 slice 参数**共享**底层数组。

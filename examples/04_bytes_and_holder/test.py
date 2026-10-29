@@ -1,5 +1,6 @@
 from pathlib import Path
 import gc
+import importlib
 import sys
 import unittest
 
@@ -8,18 +9,19 @@ example_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(example_dir.parent / ".build" / example_dir.name / "python"))
 
 import go_bytes_and_holder as bridge
-from go_bytes_and_holder import _native
+
+_native = importlib.import_module("go_bytes_and_holder._native")
 
 
 class HolderTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.baseline = _native._holder_count()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         gc.collect()
         self.assertEqual(_native._holder_count(), self.baseline)
 
-    def test_bytes_and_go_gc(self):
+    def test_bytes_and_go_gc(self) -> None:
         for value in [b"", b"hello", b"a\0b\xff", bytes(range(256))]:
             source = bridge.SliceBytes(value)
             self.assertEqual(len(source), len(value))
@@ -38,7 +40,7 @@ class HolderTests(unittest.TestCase):
             self.assertEqual(_native._holder_count(), self.baseline)
             self.assertEqual(copied, b"Echo: " + value)
 
-    def test_destructor_and_alias(self):
+    def test_destructor_and_alias(self) -> None:
         for _ in range(20):
             source = bridge.SliceBytes(b"retained")
             alias = source
@@ -50,18 +52,18 @@ class HolderTests(unittest.TestCase):
             gc.collect()
             self.assertEqual(_native._holder_count(), self.baseline)
 
-    def test_minimal_public_surface(self):
+    def test_minimal_public_surface(self) -> None:
         source = bridge.SliceBytes(b"x")
         self.assertIsInstance(source, bridge.Ref)
         self.assertTrue(issubclass(bridge.SliceBytes, bridge.Ref))
         with self.assertRaises(TypeError):
-            bridge.Ref()
+            bridge.Ref()  # type: ignore[call-arg]
         for name in ["index", "closed", "close", "__enter__", "__exit__"]:
             self.assertFalse(hasattr(source, name))
         del source
 
-    def test_ref_lifetime_on_exception(self):
-        def use_ref():
+    def test_ref_lifetime_on_exception(self) -> None:
+        def use_ref() -> None:
             reference: bridge.Ref = bridge.SliceBytes(b"temporary")
             self.assertIsInstance(reference, bridge.Ref)
             raise RuntimeError("body")
@@ -71,12 +73,12 @@ class HolderTests(unittest.TestCase):
         gc.collect()
         self.assertEqual(_native._holder_count(), self.baseline)
 
-    def test_rejected_types(self):
+    def test_rejected_types(self) -> None:
         for value in ["text", bytearray(b"data"), memoryview(b"data"), None]:
             with self.assertRaises(TypeError):
-                bridge.SliceBytes(value)
+                bridge.SliceBytes(value)  # type: ignore[arg-type]
         with self.assertRaises(TypeError):
-            bridge.recv_and_return_bytes(b"create a SliceBytes first")
+            bridge.recv_and_return_bytes(b"create a SliceBytes first")  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

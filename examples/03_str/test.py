@@ -10,13 +10,13 @@ import go_str as bridge
 
 
 class StringTests(unittest.TestCase):
-    def test_strings(self):
+    def test_strings(self) -> None:
         for value in ["", "hello", "中文 🐍", "a\0b"]:
             self.assertEqual(bridge.recv_and_return(value), "Echo: " + value)
         with self.assertRaises(UnicodeEncodeError):
             bridge.recv_and_return("\ud800")
         with self.assertRaises(TypeError):
-            bridge.recv_and_return(b"not str")
+            bridge.recv_and_return(b"not str")  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

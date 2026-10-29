@@ -66,8 +66,9 @@ G 只直接出现 `***int`、`**int`（`Retarget`）、`IntPtr`、`Box`、`**Box
 ### nil
 
 Python 不能构造 nil，但 Go 代码可以写入：`clear(pp)` 执行 `*pp = nil`。读取该级
-`.value` 抛 `ValueError`，其他级不受影响；再次赋值即可恢复。可空值的正式设计
-（`X | None`）留给后续案例。
+`.value` 抛 `ValueError`，其他级不受影响；再次赋值即可恢复。
+这是本例在引入 nil 包装前的限制。正式 nil 映射见 [09_nil](../09_nil/readme.md)：
+返回同类型的 nil 包装，使用 `is_nil` 判断，类型标注仍为 `T`。
 
 ## 命名指针 `type IntPtr *int`
 
@@ -87,6 +88,9 @@ Python 不能构造 nil，但 Go 代码可以写入：`clear(pp)` 执行 `*pp = 
 - `pp.value` 返回同一个 struct 的新 `PtrBox` 包装；`pp.value = other.addr()` 复制指针。
 - `Box`、`PtrBox` 与 `PtrPtrBox` 互不接受：`inc_box_pp(box)` 与 `inc_box_pp(p)` 都抛
   `TypeError`。
+
+Box 构造时省略 count 或 inner 使用对应 Go 零值；显式传值必须是 Counter 或 Inner，
+None 不表示省略。
 
 ## 所有权与边界
 

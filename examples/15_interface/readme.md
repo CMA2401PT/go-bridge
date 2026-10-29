@@ -2,8 +2,8 @@
 
 Go 返回接口时，Python 得到对应接口的包装对象。包装持有 Go 的动态值，并暴露接口
 声明的方法；即使实现是未导出的 Go 类型，也可以调用。接口包装和 `GoAny` 都继承
-`GoInterface`。具体包装类不可继承，不使用 Python `Protocol`，因为 Python 对象
-实现同名方法并不能成为 Go interface 的实现者。
+`GoInterface`，后者继承负责句柄所有权的 `Ref`。具体包装类不可继承，不使用
+Python `Protocol`，因为 Python 对象实现同名方法并不能成为 Go interface 的实现者。
 
 需要把已知的 Go 包装对象传给接口参数时，使用 `Counter(value)` 显式转换。生成器
 通过 Go 的可赋值性规则决定允许的来源，并写入 `.pyi`。值接收者和指针接收者有不同
