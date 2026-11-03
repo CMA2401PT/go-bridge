@@ -1,178 +1,31 @@
 # go-bridge
 
-`go-bridge` 的长期目标是提供一个代码生成工具，让 Python 可以自然地调用 Go
-代码编译得到的库。
+go-bridge 读取一个 Go 包，生成一个 Python 原生扩展包，让 Python 可以直接调用这个
+Go 包里的函数、类型和方法，并带有完整的 `.pyi` 类型声明。
 
-本文使用以下几个简称：
-
-- **G**：作为输入的 Go 代码。
-- **C**：代码生成工具（不是 C 语言）。
-- **P**：C 根据 G 生成的 pybind11/C++ 扩展、Python package 和 `.pyi` 类型声明。
-
-目标流程可以概括为：
+它的工作方式是：先为 Go 包生成一层导出 C ABI 的 Go 适配代码，编译成动态库；
+再生成调用这个动态库的 pybind11/C++ 扩展和 Python package。整个调用走 CPython
+原生扩展，不经过 `ctypes`。
 
 ```text
-Go 代码 G ────────────────> 编译后的动态库
-    │                            │
-    └──── 输入生成工具 C ───> 包装代码 P
-                                 │
-                                 └──── Python 用户调用 Go API
+你的 Go 包 ──go-bridge──> 生成目录 ──python build.py──> 可 import 的 Python 包
+                          ├── go/main.go      Go 适配层（导出 C ABI）
+                          ├── bindings.cpp    pybind11 扩展
+                          └── go_xxx/         __init__.py / __init__.pyi
 ```
 
-实际落地时，还需要生成一层 Go 导出适配代码，将原始 Go API 转换为稳定的
-C ABI；pybind11 扩展再调用该 ABI，并向 Python 暴露 CPython 原生扩展接口。
-项目的目标实现是 pybind11 路线，而不是基于 `ctypes` 的运行时调用。生成结果
-还必须包含 `.pyi`，让 IDE 和静态类型检查器获得明确的类型信息。
+## 一个完整的例子
 
-## 当前阶段：根据样例实现生成器
-
-生成器已覆盖 examples 01–15，并完成原生编译、行为与类型声明验收。完整路线、阶段状态与支持范围见
-[`docs/generator-plan.md`](docs/generator-plan.md)，模块边界见
-[`docs/generator-architecture.md`](docs/generator-architecture.md)。每个可验证阶段单独提交。
-
-维护代码从[文档导航](docs/README.md)开始：按分工、模型、完整调用实例、运行时协议、
-扩展与排障逐步阅读。文档对应当前实现，并明确标出尚未落地的后续设计。
-
-examples 先行研究的问题是：对于一组有代表性的 Go 代码 G，理想的 Python
-包装 P 究竟应该是什么样，才能正确、安全并且符合 Python 的使用习惯？
-
-`examples/` 是行为参考。每个 example 都应先人工完成一条端到端
-链路：
-
-1. 编写一个范围明确、具有代表性的 Go API。
-2. 手工设计 Go 到动态库 ABI 的导出适配层。
-3. 手工编写理想的 pybind11/C++ 扩展、Python package 和 `.pyi`。
-4. 编译并运行测试，验证行为、类型转换、错误处理和内存管理。
-5. 在文档中记录设计选择、已知限制和可推广的映射规则。
-
-这些人工验证过的案例是生成器的“黄金样例”。生成产物不要求与手写代码逐字一致；
-nil 表示参考 09，所有样例与生成器均不恢复 Go panic。具体能力以生成器已通过的
-端到端测试为准，不能把计划中的能力当作已经实现。
-
-更详细的 example 规范和建议覆盖范围见 [`examples/readme.md`](examples/readme.md)。
-
-## 当前可用的生成器
-
-目前后端支持基础 bool、所有整数宽度（含 int/uint/uintptr）、float32/float64、
-string，以及由这些类型组成的函数参数和任意数量返回值。这些基础类型的 Go alias
-保留为 Python 类型别名。已支持 Ref、字节/一般/嵌套 slice 的构造、索引、共享切片、
-clone 与批量复制。生成调用不捕获 Go panic：未恢复的 panic（含 `panic(nil)`）
-终止整个 Python 进程，不能用 Python `try/except` 捕获。详见[运行时契约](docs/generator-runtime.md)。
-
-已支持命名标量与 slice、struct 构造/字段/提升字段/方法、普通/多级/命名指针，以及
-同类包装的 typed nil。any/interface{} 使用 GoAny 显式装箱和断言，支持 any 字段、
-`*any` 与 `[]any`；未知动态类型可持有和传回。生成器原生测试覆盖 examples 01–15，
-行为细节见[对象协议](docs/generator-objects.md)和[any 协议](docs/generator-any.md)。
-channel 支持三种方向、命名类型和同步 Python 接收回调，收发及原 Go API 调用释放 GIL。
-用法见 [11_channel](examples/11_channel/readme.md)。map 支持 Go 键比较、共享、浅复制、
-nil 和批量键值对读取，见 [12_map](examples/12_map/readme.md)。定长数组保留 Go 值语义，
-支持复制、变量视图与取址，见 [13_array](examples/13_array/readme.md)。Go 函数值可持有、
-调用和传回，闭包保持共享，见 [14_func](examples/14_func/readme.md)。一般 interface
-支持 Go 实现的方法调用、显式转换和动态断言，error 保持普通接口值，见
-[15_interface](examples/15_interface/readme.md)。
-泛型、可变参数、导出变量/常量及 named bool 仍明确拒绝。
-
-从仓库根目录运行：
-
-```sh
-go run . -out generated/basic ./examples/01_basic
-python generated/basic/build.py
-PYTHONPATH=generated/basic/.build/python python -c 'import go_basic_value as b; print(b.int_in_and_out(1))'
-```
-
-构建用的 Python 需安装 `pybind11`、`setuptools`；导入时使用同一解释器。
-当前实际验证环境为 macOS arm64、Go 1.27.1、CPython 3.13、pybind11 3.0.1。
-构建脚本也提供 Linux 路径，尚未在本轮执行 Linux 验证。仓库要求 Go 1.25.5 或更新。
-
-CLI 接受一个包目录或 import path：
-
-```sh
-go build -o /tmp/go-bridge .
-/tmp/go-bridge -out /tmp/my-bindings -name my_python_package /path/to/go/package
-/tmp/go-bridge -dir /path/to/go/module -out /tmp/my-bindings-other example.org/module/pkg
-```
-
-`-name` 默认为 `go_<包名的 snake_case>`。输出目录必须不存在或为空，生成器不覆盖
-已有项目。生成与构建分离；输出里的 `bridge.json` 记录原始源码目录，构建仍依赖
-原 Go module/workspace。输出不是可独立分发的 wheel，也不承诺搬迁源码后仍能构建。
-
-```text
-generated/basic/
-├── go/main.go             # Go C ABI 适配层
-├── bindings.cpp           # pybind11 绑定
-├── go_basic_value/        # __init__.py、__init__.pyi、py.typed
-├── bridge.json            # 构建上下文
-├── build.py
-└── .build/python/         # 构建后可导入的 package
-```
-
-验证命令：
-
-```sh
-go test ./...
-go vet ./...
-GO_BRIDGE_PYTHON=python go test ./internal/generate -run TestIntegration -v
-# 解释器还安装了 mypy 时，同时检查生成的 .pyi：
-GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIntegration -v
-```
-
-集成测试从生成产物编译和调用，不依赖 `expected/`；包括 01–15 与独立临时 module、跨包类型、组合资源与 panic 子进程。
-消费者类型检查、holder race、原生 cgocheck2/checkptr 及未验证范围见[验收记录](docs/generator-acceptance.md)。
-未设置 `GO_BRIDGE_PYTHON` 时，常规 Go 测试会明确跳过原生编译集成测试。
-
-## 每个 example 要回答的问题
-
-一个完整案例应区分三层接口：
-
-```text
-原始 Go API
-    ↓
-动态库边界上的 ABI
-    ↓
-Python 用户最终看到的 API
-```
-
-它至少需要回答：
-
-- Go 类型在 ABI 层使用什么稳定表示？
-- Python 侧暴露什么类型和调用方式？
-- `.pyi` 应如何准确表达参数、返回值、重载和可空性？
-- 输入和返回值是否发生复制，内存由谁分配、由谁释放？
-- Go 对象跨调用存活时，句柄和生命周期如何管理？
-- `error`、`panic` 和空值如何映射为 Python 行为？
-- 哪些 Go 语义不能直接跨越 ABI，需要适配、限制或明确拒绝？
-- 方案在 Linux、macOS 和 Windows 上有哪些差异？
-
-能够“调用成功”只是最低要求；接口语义、所有权和异常路径同样属于案例的正确性。
-
-## 建议的探索顺序
-
-examples 可以由简单到复杂逐步覆盖：
-
-1. 固定宽度数值和布尔值。
-2. 字符串与字节序列。
-3. slice、数组和多返回值。
-4. `error`、`panic` 与 Python 异常。
-5. struct、命名类型和枚举式常量。
-6. 指针、可空值以及对象句柄。
-7. 方法、构造函数和对象生命周期。
-8. callback、goroutine、线程与 GIL。
-9. map、interface、泛型等难以直接跨 ABI 的类型。
-
-这里的顺序是研究路线，不代表这些能力已经实现。
-
-## 最终期望的 Python 体验
-
-例如输入的 Go 包含：
+假设你有这样一个 Go 包：
 
 ```go
+// person/person.go
 package person
 
 import "fmt"
 
 type School struct {
 	Name     string
-	Age      int
 	Duration int
 }
 
@@ -182,16 +35,26 @@ type Person struct {
 	Schools []School
 }
 
-func (p Person) SayName() {
-	fmt.Println("I am ", p.Name)
-}
-
 func NewPerson(name string, age int, schools []School) *Person {
 	return &Person{Name: name, Age: age, Schools: schools}
 }
+
+func (p *Person) Greet() string {
+	return fmt.Sprintf("Hi, I am %s, %d years old", p.Name, p.Age)
+}
+
+func (p *Person) Birthday() { p.Age++ }
+
+func ParseAge(text string) (int, error) {
+	var age int
+	if _, err := fmt.Sscanf(text, "%d", &age); err != nil {
+		return 0, err
+	}
+	return age, nil
+}
 ```
 
-当前接口按如下方式使用（Go 字段 Value 等桥接保留名会加下划线）：
+生成后，Python 里这样用：
 
 ```python
 import go_person as person
@@ -199,22 +62,177 @@ import go_person as person
 alice = person.new_person(
     "alice",
     16,
-    person.SliceSchool([person.School(name="PrimarySchool", age=8, duration=10)]),
+    person.SliceSchool([person.School(name="Sunshine Primary", duration=6)]),
 )
-print(alice.name)
-alice.name = "Alice"
-alice.say_name()
+print(alice.greet())        # Hi, I am alice, 16 years old
+alice.birthday()            # 调用 Go 的指针方法，修改的是同一个 Go 对象
+alice.name = "Alice"        # 直接读写 Go struct 字段
+print(alice.greet())        # Hi, I am Alice, 17 years old
+print(alice.schools[0].name, len(alice.schools))  # Sunshine Primary 1
+
+age, err = person.parse_age("forty-two")
+if not err.is_nil:
+    print("failed:", err.error())  # failed: expected integer
 ```
 
-struct、slice、指针和方法已有生成器端到端测试；这段代码用于说明它们的组合方式。
+这段代码能通过 `mypy --strict`：IDE 能补全 `alice.greet`，也能知道
+`parse_age` 返回 `tuple[int, error]`。
 
-## 给后续贡献者和 agent 的工作原则
+## 快速上手
 
-- 在映射规则尚未由 example 验证前，不要把当前原型当作既定架构。
-- 新增能力时，优先补充一个最小、可运行、带文档的 example。
-- 清楚区分“原始 Go 代码”“Go/ABI 适配层”“pybind11 扩展”和“Python package”。
-- 不要只验证正常返回；同时验证边界值、错误路径、资源释放和重复调用。
-- 从多个黄金样例中提炼出稳定规则后，再将规则实现进生成器。
+### 环境要求
 
-旧 `gen/` 和硬编码生成入口已删除，新实现位于 `internal/`。`generated/` 用于本地
-产物，不提交；`examples/expected/` 继续作为手写行为参考维护。
+- Go 1.25.5 或更新，cgo 可用（需要 C/C++ 编译器）。
+- Python 3，并安装 `pybind11` 和 `setuptools`：`pip install pybind11 setuptools`。
+- macOS 或 Linux。实际验证过的环境是 macOS arm64、Go 1.27.1、CPython 3.13、
+  pybind11 3.0.1；Linux 路径已写好但尚未实测，Windows 不支持。
+
+### 第一步：编译 go-bridge
+
+在本仓库根目录：
+
+```sh
+go build -o /tmp/go-bridge .
+```
+
+### 第二步：为你的 Go 包生成绑定
+
+在你自己的 Go module 里（即上面 `person` 包所在的 module 根目录）：
+
+```sh
+/tmp/go-bridge -out ./bindings ./person
+```
+
+Python 包名默认是 `go_` 加上 Go 包名的 snake_case，这里就是 `go_person`。
+可以用 `-name` 改名。也可以不进入 module 目录，用 `-dir` 指定从哪里加载 Go 包：
+
+```sh
+/tmp/go-bridge -dir /path/to/your/module -out ./bindings -name my_pkg example.com/demo/person
+```
+
+`-out` 必须是不存在或为空的目录，生成器不会覆盖已有文件。
+
+### 第三步：构建并导入
+
+```sh
+python bindings/build.py
+PYTHONPATH=bindings/.build/python python -c 'import go_person; print(go_person.parse_age("42")[0])'
+```
+
+`build.py` 会编译 Go 动态库和 pybind11 扩展，把可导入的包放到
+`bindings/.build/python/go_person/`。构建和导入要用同一个 Python 解释器，
+因为扩展是针对这个解释器编译的。
+
+构建时仍然需要原来的 Go 源码：生成目录里的 `bridge.json` 记录了源码位置。
+所以生成目录不是可以单独分发的 wheel，Go 源码改动后也要重新生成并重新构建。
+
+## Go API 在 Python 里长什么样
+
+下面这些规则决定了你写 Python 时的手感，大多数"为什么报错"都能在这里找到答案。
+
+**命名改成 Python 风格。** 函数、方法、字段都转成 snake_case：`NewPerson` →
+`new_person`，`Schools` → `schools`。类型名保持原样，组合类型按结构命名：
+`[]School` → `SliceSchool`，`*Person` → `PtrPerson`，`map[string]int` → `MapStringInt`。
+字段名与桥接层保留名（如 `value`）冲突时会加下划线。
+
+**基础类型直接用 Python 值。** `bool`、各宽度整数、浮点数、`string` 直接传 Python
+的 `bool`/`int`/`float`/`str`。整数超出 Go 类型范围抛 `OverflowError`，类型不对抛
+`TypeError`。多返回值变成 tuple。
+
+**其他 Go 值是 Python 包装对象，必须显式构造。** slice、struct、指针、map 等在
+Python 里是持有 Go 对象的包装（`Ref`）。传参时要传对应的包装类型，不会自动把
+Python list 转成 Go slice：
+
+```python
+person.new_person("bob", 3, person.SliceSchool([]))  # 正确
+person.new_person("bob", 3, [])                      # TypeError
+```
+
+这是为了保留 Go 的共享语义：多个 Python 包装可以指向同一个 Go slice 或 map，
+一边修改另一边可见，和在 Go 里一样。需要 Python 原生数据时，用
+`copy_to_py_list()` 之类的方法显式复制出来。
+
+**struct 是一个 Go 变量，可以取地址。** `person.Person(name="bob", age=3)` 创建一个
+Go struct 变量，`.addr()` 得到 `PtrPerson`。Go 中指针接收者的方法在两者上都能调用。
+
+**nil 是带类型的值。** 指针、map、channel、函数值和 interface 的 nil 用
+`PtrPerson.nil()` 这样的类方法构造，用 `.is_nil` 判断。这些包装不能直接放进
+`if`，因为"是 nil"和"是零值"在 Go 里是两回事。
+
+**error 是普通返回值，不是异常。** Go 的 `error` 和其他 interface 一样返回一个包装，
+用 `err.is_nil` 判断是否出错、`err.error()` 取消息。这和 Go 本身的写法一致。
+
+**Go panic 会直接终止 Python 进程。** 桥接层不恢复 panic，`try/except` 抓不到。
+Go 代码里的 nil 指针解引用、越界访问都属于这一类，调用前需要像在 Go 里一样自己保证前提。
+
+**any 需要显式装箱和断言。** `any`/`interface{}` 映射为 `GoAny`，用
+`int_as_any(1)` 装箱，用 `any_as_int(v)` 或 `try_any_as_int(v)` 取回。
+
+**耗时调用会释放 GIL。** channel 收发和原 Go 函数调用期间释放 GIL，其他 Python
+线程可以继续运行。
+
+## 支持哪些 Go 类型
+
+每一项都有一个最小样例，写明了 Python 侧的 API、复制与共享语义和限制：
+
+| Go 类型 | Python 侧 | 样例 |
+| --- | --- | --- |
+| bool、整数、浮点数、string 及其 alias | Python 原生值 | [01](examples/01_basic/readme.md)、[03](examples/03_str/readme.md) |
+| 多返回值 | tuple | [02](examples/02_multi_return/readme.md) |
+| `[]byte`、`[]T`、嵌套 slice | `SliceT`，共享底层数组 | [04](examples/04_bytes_and_holder/readme.md)、[05](examples/05_slice/readme.md) |
+| 命名类型、struct、方法、提升字段 | 同名类 | [06](examples/06_named_type/readme.md) |
+| 指针、多级指针、命名指针 | `PtrT` | [07](examples/07_ptr_basic/readme.md)、[08](examples/08_multi_ptr/readme.md) |
+| typed nil | `.nil()` / `.is_nil` | [09](examples/09_nil/readme.md) |
+| `any` / `interface{}` | `GoAny` | [10](examples/10_any/readme.md) |
+| channel（三种方向） | `ChanT`，用 Python 回调接收 | [11](examples/11_channel/readme.md) |
+| map | `MapKV`，由 Go 比较键 | [12](examples/12_map/readme.md) |
+| 定长数组 | `ArrayNT`，值语义 | [13](examples/13_array/readme.md) |
+| 函数值、闭包 | 可调用对象 | [14](examples/14_func/readme.md) |
+| 一般 interface、error | 接口包装，可调用方法与断言 | [15](examples/15_interface/readme.md) |
+
+完整的映射规则见 [类型映射总览](examples/types.md)。
+
+以下 Go 特性暂不支持：泛型、可变参数函数、导出变量和常量、命名 bool 类型、
+匿名 struct，以及用 Python 对象实现 Go interface 或作为 Go 回调函数传入。
+如果这些类型只在包内部使用，不影响生成；一旦出现在导出 API 里，生成器会报告
+具体是哪个声明、字段或参数，然后停止，而不是悄悄跳过。
+
+## 先跑一下仓库自带的样例
+
+不想自己写 Go 包，也可以直接用 `examples/` 里的任何一个目录试：
+
+```sh
+go run . -out generated/basic ./examples/01_basic
+python generated/basic/build.py
+PYTHONPATH=generated/basic/.build/python python -c 'import go_basic_value as b; print(b.int_in_and_out(1))'
+```
+
+`generated/` 不提交到仓库，可以随意删除重建。
+
+## 参与开发
+
+仓库结构：
+
+- `main.go`：CLI 入口。
+- `internal/`：生成器实现，按"读取 Go 类型 → 设计 Python API → 设计 ABI → 输出代码"分层。
+- `examples/`：每种 Go 特性的手写参考实现和测试，是生成器行为的标准答案。
+  `expected/` 下是人工编写的理想产物，不是生成器输出。
+- `docs/`：生成器的设计和维护文档，从 [文档导航](docs/README.md) 开始读。
+
+运行测试：
+
+```sh
+go test ./...
+go vet ./...
+# 原生集成测试：真正生成、编译并在 Python 里调用 examples 01–15
+GO_BRIDGE_PYTHON=python go test ./internal/generate -run TestIntegration -v
+# 解释器装了 mypy 时，同时检查生成的 .pyi
+GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIntegration -v
+```
+
+不设置 `GO_BRIDGE_PYTHON` 时，常规 `go test` 会跳过需要原生编译的集成测试。
+哪些行为已经实测、哪些环境尚未验证，见 [验收记录](docs/generator-acceptance.md)。
+
+新增一种 Go 特性的支持时，先在 `examples/` 里写一个最小、可运行、带文档的样例，
+确定 Python 侧该是什么样子，再实现到生成器里。具体流程见
+[examples/readme.md](examples/readme.md) 和 [扩展、验证与排障](docs/generator-maintenance.md)。
