@@ -1,6 +1,6 @@
 # 扩展、验证与排障
 
-[文档导航](README.md) · [模块分工](generator-architecture.md) · [阶段计划](generator-plan.md)
+[文档导航](README.md) · [模块分工](generator-architecture.md)
 
 ## 改动落点
 

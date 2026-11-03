@@ -1,8 +1,8 @@
 # 类型映射总览
 
 本文汇总 01–15 已确认的 Go → Python 类型规则，是各案例 readme 的索引与上位约定。
-具体 ABI、测试与限制见对应案例。本文描述手写样例；当前生成器的契约见
-[实施计划](../docs/generator-plan.md)与[运行时协议](../docs/generator-runtime.md)。
+具体 ABI、测试与限制见对应案例。本文描述手写样例；生成器的契约见
+[运行时协议](../docs/generator-runtime.md)。
 样例与生成器均不恢复 Go panic；未恢复的 panic（包括 nil 解引用）会终止整个
 Python 进程。
 

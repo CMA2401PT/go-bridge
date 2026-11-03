@@ -2,7 +2,7 @@
 
 `examples/` 用于研究和定义 **Go API 应当如何映射为可用的 Python API**。
 这里的案例是代码生成器的行为参考与黄金测试。先人工验证应该生成什么，再实现生成器。
-生成器的当前能力与路线见 [`../docs/generator-plan.md`](../docs/generator-plan.md)。
+生成器的当前能力见[仓库首页](../readme.md)。
 生成产物不要求逐字匹配 expected；部分案例的规则与生成器不同，nil 表示以 09 为准。
 样例与生成器均不捕获 Go panic，未恢复的 panic 终止整个 Python 进程。
 
