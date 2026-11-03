@@ -32,16 +32,35 @@ func Introduce(animal Animal) string
 func Feed(animal Animal, food string) (string, error)
 ```
 
-完整代码见 [G.go](G.go)。下面的 Python 片段都来自 [test.py](test.py)。
+完整代码见 [G.go](G.go)。想先看整体效果，构建后直接运行 [demo.py](demo.py)，它按
+"领养 → 断言 → 传参 → 喂食"走一遍完整流程：
+
+```sh
+python examples/build.py 15_interface
+python examples/15_interface/demo.py
+```
+
+```text
+cat | Hachimi: meow meow
+dog | Bruce: woof woof
+renamed through *Cat: Hachimi the Great: meow
+is bruce a *Cat? False
+this is a dog. Bruce Jr.: woof
+this is a cat. Hachimi Jr.: meow
+fed: cat ate fish
+failed: Hachimi the Great only eats fish
+```
+
+下面逐个拆开讲，片段都来自 [test.py](test.py)。
 
 ## 返回接口：只看得到接口的方法
 
 ```python
 import go_interface as bridge
 
-hachimi = bridge.adopt(kind="dog", name="Hachimi")   # 类型是 Animal
-hachimi.kind()           # "dog"
-hachimi.speak(times=2)   # "Hachimi: woof woof"
+bruce = bridge.adopt(kind="dog", name="Bruce")  # 类型是 Animal
+bruce.kind()                                    # "dog"
+bruce.speak(times=2)                            # "Bruce: woof woof"
 ```
 
 `adopt` 的返回类型固定是 `Animal`，不会因为里面装的是 Dog 就变成 `Dog`。
@@ -50,14 +69,14 @@ hachimi.speak(times=2)   # "Hachimi: woof woof"
 ## 类型断言：取回具体类型
 
 ```python
-dog = bridge.Dog.from_any(value=hachimi)   # 断言成功，得到 Dog
-dog.name                                   # "Hachimi"
-bridge.PtrCat.try_from_any(value=hachimi)  # 不是 *Cat，返回 None
+dog = bridge.Dog.from_any(value=bruce)              # 断言成功，得到 Dog
+dog.name                                            # "Bruce"
+bridge.PtrCat.try_from_any(value=bruce)             # 不是 *Cat，返回 None
 
-bruce = bridge.adopt(kind="cat", name="Bruce")
-bridge.PtrCat.from_any(value=bruce).name   # "Bruce"
-bridge.Cat.try_from_any(value=bruce)       # None：动态类型是 *Cat，不是 Cat
-bridge.Dog.from_any(value=bruce)           # TypeError
+hachimi = bridge.adopt(kind="cat", name="Hachimi")
+bridge.PtrCat.from_any(value=hachimi).name          # "Hachimi"
+bridge.Cat.try_from_any(value=hachimi)              # None：动态类型是 *Cat，不是 Cat
+bridge.Dog.from_any(value=hachimi)                  # TypeError
 ```
 
 `from_any` 对应 Go 的 `v := x.(T)`，失败抛 `TypeError`；`try_from_any` 对应
@@ -70,11 +89,11 @@ bridge.Dog.from_any(value=bruce)           # TypeError
 ## 传入接口参数：必须显式构造
 
 ```python
-dog = bridge.Dog(name="Hachimi")
+dog = bridge.Dog(name="Bruce")
 bridge.introduce(animal=bridge.Animal(value=dog))           # 正确
 bridge.introduce(animal=dog)                                # TypeError，mypy 也会报错
 
-cat = bridge.Cat(name="Bruce")
+cat = bridge.Cat(name="Hachimi")
 bridge.introduce(animal=bridge.Animal(value=cat.addr()))    # 正确：*Cat 是 Animal
 bridge.Animal(value=cat)                                    # TypeError：Cat 值不是 Animal
 ```
@@ -99,15 +118,15 @@ Animal 放行，到运行时才失败。普通 Python 对象凑齐同名方法�
 接口值和 Go 一样，装进去的是值本身：
 
 ```python
-dog = bridge.Dog(name="Hachimi")
-hachimi = bridge.Animal(value=dog)
-dog.name = "Hachimi II"
-hachimi.speak(times=1)    # "Hachimi: woof"，接口里是一份复制
+dog = bridge.Dog(name="Bruce")
+bruce = bridge.Animal(value=dog)
+dog.name = "Bruce II"
+bruce.speak(times=1)    # "Bruce: woof"，接口里是一份复制
 
-cat = bridge.Cat(name="Bruce")
-bruce = bridge.Animal(value=cat.addr())
-cat.name = "Bruce II"
-bruce.speak(times=1)      # "Bruce II: meow"，接口里是指向 cat 的指针
+cat = bridge.Cat(name="Hachimi")
+hachimi = bridge.Animal(value=cat.addr())
+cat.name = "Hachimi II"
+hachimi.speak(times=1)      # "Hachimi II: meow"，接口里是指向 cat 的指针
 ```
 
 struct 和数组装进接口时被复制；指针装进去后仍指向原变量；slice、map 等保持各自的
@@ -129,9 +148,9 @@ stray.speak(times=1)        # "(no cat)"，Cat 的方法自己处理了 nil 接�
 ## error 是普通接口
 
 ```python
-value, err = bridge.feed(animal=bruce, food="bone")
+value, err = bridge.feed(animal=hachimi, food="bone")
 if not err.is_nil:
-    err.error()   # "Bruce only eats fish"
+    err.error()   # "Hachimi only eats fish"
 ```
 
 Go 的 `error` 就是声明了 `Error() string` 的接口，Python 里同样是接口包装，类名保留
@@ -154,7 +173,8 @@ Go 的 `error` 就是声明了 `Error() string` 的接口，Python 里同样是�
 
 ```sh
 python examples/build.py 15_interface --test
-MYPYPATH=examples/.build/15_interface/python python -m mypy --strict examples/15_interface/test.py
+python examples/15_interface/demo.py
+MYPYPATH=examples/.build/15_interface/python python -m mypy --strict examples/15_interface/test.py examples/15_interface/demo.py
 GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/generate -run TestIntegrationInterface -count=1
 ```
 
