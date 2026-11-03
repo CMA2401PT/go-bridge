@@ -1,5 +1,5 @@
 """从 Python 使用 Go interface 的完整流程，构建后直接运行即可看到每一步的结果。"""
-# type: ignore
+
 from pathlib import Path
 import sys
 

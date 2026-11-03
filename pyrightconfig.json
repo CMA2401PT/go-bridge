@@ -1,0 +1,19 @@
+{
+  "extraPaths": [
+    "examples/.build/01_basic/python",
+    "examples/.build/02_multi_return/python",
+    "examples/.build/03_str/python",
+    "examples/.build/04_bytes_and_holder/python",
+    "examples/.build/05_slice/python",
+    "examples/.build/06_named_type/python",
+    "examples/.build/07_ptr_basic/python",
+    "examples/.build/08_multi_ptr/python",
+    "examples/.build/09_nil/python",
+    "examples/.build/10_any/python",
+    "examples/.build/11_channel/python",
+    "examples/.build/12_map/python",
+    "examples/.build/13_array/python",
+    "examples/.build/14_func/python",
+    "examples/.build/15_interface/python"
+  ]
+}
