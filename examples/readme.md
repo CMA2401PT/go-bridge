@@ -22,6 +22,7 @@ examples/
     ├── readme.md                 # 本例范围、映射规则和限制
     ├── G.go                      # 输入：普通 Go API
     ├── test.py                   # 验证：Python 用户看到的行为
+    ├── demo.py                   # 可直接运行的使用例子
     └── expected/                 # 手写的预期生成结果
         ├── go/
         │   └── main.go           # package main，导出 C ABI
@@ -31,7 +32,7 @@ examples/
             └── __init__.pyi      # 公共 API 类型声明
 ```
 
-每个案例只维护输入、期望输出、测试和本例文档。`expected/` 中的代码由人工
+每个案例只维护输入、期望输出、测试、使用例子和本例文档。`expected/` 中的代码由人工
 编写，不是生成器产物；`.build/` 中的内容可以通过构建重新得到。
 
 Go 适配层单独放在 `expected/go/`，因为它是独立的 `package main`。
@@ -76,7 +77,7 @@ MYPYPATH=examples/.build/01_basic/python mypy examples/01_basic/test.py --strict
 1. 参照 `01_basic` 创建新目录，编写聚焦单一特性的 `G.go`。
 2. 修改 `expected/go/main.go` 的 Go import 和 C ABI 适配代码。
 3. 编写 `expected/bindings.cpp`、Python package 和 `.pyi`；包名按案例选择。
-4. 编写 `test.py` 和本例 `readme.md`。
+4. 编写 `test.py`、`demo.py` 和本例 `readme.md`；readme 中附上 demo 的运行命令和输出。
 5. 运行 `python examples/build.py <案例目录名> --test`。
 
 不需要复制构建脚本、setup.py、py.typed 或构建产物。Python 调用通过编译后的

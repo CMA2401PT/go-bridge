@@ -11,6 +11,22 @@ python examples/build.py 07_ptr_basic --test
 go test -race ./examples/07_ptr_basic/expected/go
 ```
 
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 07_ptr_basic
+python examples/07_ptr_basic/demo.py
+```
+
+```text
+经指针递增: Python 原值 = 5 | Go 变量 = 6
+别名写回: 10
+命名指针: 原值 = 1 | 读取副本 = 1 | 当前值 = 2
+经指针调用值方法: my non struct int: 2
+append 后: 原切片 = [1] | 旧切片头 = [1]
+指针中的新切片: [1, 2]
+```
+
 ## Python API
 
 ```python

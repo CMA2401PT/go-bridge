@@ -15,6 +15,20 @@ while ch.recv(callback=values.append):
 assert values == [0, 1, 2]
 ```
 
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 11_channel
+python examples/11_channel/demo.py
+```
+
+```text
+Go 发来的数据: [0, 1, 2]
+关闭后再接收: False | 数据: [0, 1, 2]
+关闭后读完缓冲区: [0, 9]
+Go 收到并求和: 10
+```
+
 ## 接收与回调
 
 `recv(callback: Callable[[T], None]) -> bool` 每次接收一个值。成功时调用一次回调并

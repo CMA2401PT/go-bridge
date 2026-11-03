@@ -15,6 +15,22 @@ python examples/build.py 06_named_type --test
 go test -race ./examples/06_named_type/expected/go
 ```
 
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 06_named_type
+python examples/06_named_type/demo.py
+```
+
+```text
+命名 int: my non struct int: 5
+加法结果: 6 int | 恢复命名: my non struct int: 6
+转换后共享: [10, 20] | 命名切片: [10, 20]
+构造复制: 源对象 = 60 | 子字段 = 6
+字段视图写回: 7 | 省略字段的零值: 0
+接收者: 原对象 = 1 | 返回副本 = 2
+```
+
 ## Python API
 
 ```python

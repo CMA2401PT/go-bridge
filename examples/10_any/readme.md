@@ -15,6 +15,23 @@ GOEXPERIMENT=cgocheck2 go test -race -gcflags=all=-d=checkptr=2 ./examples/10_an
 MYPYPATH=examples/.build/10_any/python mypy examples/10_any/test.py --strict
 ```
 
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 10_any
+python examples/10_any/demo.py
+```
+
+```text
+int 装箱再返回: 42
+MyInt 取出: 42 | 按 int 断言: None
+原 struct: 9 | 装箱副本: 1
+通过指针修改后: 10
+原 slice: [8, 2]
+nil 接口: True | 装着 nil 指针的接口: False
+从 nil 接口断言: None | 取出的指针是 nil: True
+```
+
 ## Python API
 
 `GoAny` 持有一个不可直接修改的 Go interface 值，与 `typing.Any` 无关。

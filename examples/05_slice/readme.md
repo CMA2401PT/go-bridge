@@ -13,6 +13,22 @@ python examples/build.py 05_slice --test
 go test -race ./examples/05_slice/expected/go
 ```
 
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 05_slice
+python examples/05_slice/demo.py
+```
+
+```text
+Go 切片: [10, 20, 30]
+修改共享切片: [10, 21, 30]
+clone: 原切片 = [10, 21, 30] | 副本 = [0, 21, 30]
+首次拼接: [1, 2, 3]
+再次拼接: 首次结果 = [1, 2, 4] | 本次结果 = [1, 2, 4]
+嵌套浅拷贝: [[70, 8]]
+```
+
 ## Python API
 
 ```python
@@ -150,5 +166,5 @@ MYPYPATH=examples/.build/05_slice/python mypy examples/05_slice/test.py --strict
 生成器需要知道每个 slice 参数与返回值的完整元素类型，递归判断元素是按值传递
 还是按句柄传递，并为每种具体 slice 类型生成一个 `Slice[Elem]` 子类及对应的
 New / Len / Copy / At / Set / Slice / Clone 导出函数；Go 侧的 clone 与 reslice 已是
-泛型辅助函数，只有元素的 ABI 表示（值或句柄）随元素类型变化。数组 `[N]T`、其他标量元素、struct 元素以及 Python
-侧的原地修改尚未覆盖。
+泛型辅助函数，只有元素的 ABI 表示（值或句柄）随元素类型变化。本例的元素只有 int
+和 slice；struct 元素由生成器的集成测试覆盖，定长数组见 [13_array](../13_array/readme.md)。

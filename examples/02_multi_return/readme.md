@@ -11,6 +11,19 @@ python examples/build.py 02_multi_return --test
 
 成功时最后输出 `02_multi_return: OK`。
 
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 02_multi_return
+python examples/02_multi_return/demo.py
+```
+
+```text
+两个返回值: (11, 12) | 类型: tuple
+按顺序解包: first = 11 | second = 12
+四个返回值: (-1, 0, 1, 2)
+```
+
 ## 输入与 Python API
 
 `G.go` 保持普通 Go 代码，定义两个带命名返回值的函数：

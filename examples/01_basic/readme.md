@@ -11,6 +11,22 @@ python examples/build.py 01_basic --test
 
 成功时最后输出 `01_basic: OK`。
 
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 01_basic
+python examples/01_basic/demo.py
+```
+
+```text
+recv:  1
+int: 1 -> 2
+recv:  true
+bool: True -> False
+recv:  41
+uint16: 41 -> 42
+```
+
 ## 输入与期望输出
 
 `G.go` 是唯一原始输入，保持普通 Go package，不包含绑定细节：

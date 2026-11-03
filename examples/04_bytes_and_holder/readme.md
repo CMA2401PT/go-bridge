@@ -9,6 +9,21 @@ python examples/build.py 04_bytes_and_holder --test
 go test -race ./examples/04_bytes_and_holder/expected/go
 ```
 
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 04_bytes_and_holder
+python examples/04_bytes_and_holder/demo.py
+```
+
+```text
+Go 切片: 长度 = 5 | 是 Ref: True
+recv and echo:  hello
+释放输入后: 返回长度 = 11
+释放返回包装后: b'Echo: hello'
+二进制: b'a\x00b\xff' | 长度 = 4
+```
+
 ## Python API 与 Ref 的职责
 
 ```python

@@ -17,3 +17,18 @@ Go 数组把元素包含在值里。Python 包装一个 Go 数组变量，按下
 python examples/build.py 13_array --test
 MYPYPATH=examples/.build/13_array/python python -m mypy --strict examples/13_array/test.py
 ```
+
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 13_array
+python examples/13_array/demo.py
+```
+
+```text
+默认数组: [0, 0, 0] | 长度: 3
+修改末项: [1, 2, 8]
+原数组: [1, 2, 8] | Go 返回: [2, 2, 8]
+原数组: [1, 2, 8] | Python 复制: [1, 20, 8]
+指针修改后: [2, 2, 8] | 先前副本: [1, 20, 8]
+```

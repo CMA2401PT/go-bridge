@@ -8,6 +8,21 @@ struct 沿用 [06](../06_named_type/readme.md)，指针沿用
 [07](../07_ptr_basic/readme.md)。struct 包装代表一个 Go 变量，永远非 nil；
 它的指针包装可以是 nil。总体规则见 [类型映射](../types.md)。
 
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 09_nil
+python examples/09_nil/demo.py
+```
+
+```text
+nil 指针: True | 指向零: False
+传给 Go: nil 0
+空链表长度: 0 | 添加后: 2
+链表第二项: 20 | 未找到是 nil: True
+断开后长度: 1 | 原尾节点: 20
+```
+
 ## Python API
 
 ```python

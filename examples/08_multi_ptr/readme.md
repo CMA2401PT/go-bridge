@@ -10,6 +10,20 @@ python examples/build.py 08_multi_ptr --test
 go test -race ./examples/08_multi_ptr/expected/go
 ```
 
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 08_multi_ptr
+python examples/08_multi_ptr/demo.py
+```
+
+```text
+原整数: 2 | 三级指针读到: 2
+旧目标: 2 | 新目标: 11
+原整数: 3 | 命名指针: 3 | 转回后: 3
+box: {2 {3}}
+```
+
 ## Python API
 
 ```python

@@ -24,3 +24,19 @@ assert go_func.apply(value=counter, delta=3) == 15
 python examples/build.py 14_func --test
 MYPYPATH=examples/.build/14_func/python python -m mypy --strict examples/14_func/test.py
 ```
+
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 14_func
+python examples/14_func/demo.py
+```
+
+```text
+Python 调用加 2: 12
+传回 Go 加 3: 15
+返回的包装减 1: 14
+原包装再加 1: 15
+删除原包装后加 2: 17
+普通函数是 nil: False | 返回的 nil 函数: True
+```

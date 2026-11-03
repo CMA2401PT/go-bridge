@@ -7,6 +7,23 @@
 python examples/build.py 03_str --test
 ```
 
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 03_str
+python examples/03_str/demo.py
+```
+
+```text
+recv and echo:  hello
+普通文本: 'Echo: hello'
+recv and echo:  中文 🐍
+Unicode: 'Echo: 中文 🐍'
+recv and echo:  a␀b
+内嵌 NUL: 'Echo: a\x00b'
+按值传递: 'hello' -> 'Echo: hello'
+```
+
 ## 输入与 Python API
 
 `G.go` 定义 `func RecvAndReturn(inp string) string`。Python 接口和 `.pyi` 为：

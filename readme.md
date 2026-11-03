@@ -199,7 +199,15 @@ Go 代码里的 nil 指针解引用、越界访问都属于这一类，调用前
 
 ## 先跑一下仓库自带的样例
 
-不想自己写 Go 包，也可以直接用 `examples/` 里的任何一个目录试：
+不想自己写 Go 包，可以先看 `examples/` 里的样例。每个样例目录都有一个 `demo.py`，
+构建后直接运行就能看到这个 Go 特性在 Python 里怎么用：
+
+```sh
+python examples/build.py 15_interface
+python examples/15_interface/demo.py
+```
+
+也可以用生成器为任何一个样例目录生成绑定：
 
 ```sh
 go run . -out generated/basic ./examples/01_basic

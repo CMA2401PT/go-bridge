@@ -35,3 +35,19 @@ MYPYPATH=examples/.build/12_map/python python -m mypy examples/12_map/test.py --
 
 手写样例验证 string→int 的复制、共享、重复键、缺键、nil 和句柄释放。生成器
 递归收集键和值类型，为命名 map、字段、指针、slice、channel 和 any 组合复用该协议。
+
+构建后运行 [demo.py](demo.py)，可以直接看到本例的核心行为：
+
+```sh
+python examples/build.py 12_map
+python examples/12_map/demo.py
+```
+
+```text
+重复键保留后值: [('a', 2), ('b', 3)]
+原 map: 5 | 返回的 map: 5 | clone: 2
+原 map 还有 a: False
+清空后共享 map 长度: 0 | clone: [('a', 2), ('b', 3)]
+nil / 空 map 的 is_nil: True False | 长度: 0 0
+空 map 写入后: [('a', 1)]
+```
