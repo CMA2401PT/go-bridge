@@ -3,9 +3,8 @@
 `examples/` 用于研究和定义 **Go API 应当如何映射为可用的 Python API**。
 这里的案例是代码生成器的行为参考与黄金测试。先人工验证应该生成什么，再实现生成器。
 生成器的当前能力与路线见 [`../docs/generator-plan.md`](../docs/generator-plan.md)。
-生成产物不要求逐字匹配 expected；历史案例规则有版本差异，nil 表示参考 09。
+生成产物不要求逐字匹配 expected；部分案例的规则与生成器不同，nil 表示以 09 为准。
 样例与生成器均不捕获 Go panic，未恢复的 panic 终止整个 Python 进程。
-10_any 使用当前的 cgo.Handle 与不恢复 panic 协议验证 any 映射；生成器已支持 any/interface{}。
 
 ## 目录约定
 
@@ -32,7 +31,7 @@ examples/
             └── __init__.pyi      # 公共 API 类型声明
 ```
 
-每个案例只维护输入、期望输出、测试和本例文档。`expected/` 中的代码目前由人工
+每个案例只维护输入、期望输出、测试和本例文档。`expected/` 中的代码由人工
 编写，不是生成器产物；`.build/` 中的内容可以通过构建重新得到。
 
 Go 适配层单独放在 `expected/go/`，因为它是独立的 `package main`。
@@ -100,9 +99,9 @@ pybind11 扩展完成，不使用 ctypes。公共工具只负责构建，不推�
 
 案例应能从干净环境构建并通过 Python 测试，公开 API 与 `.pyi` 保持一致。
 涉及资源管理和失败路径时，应验证释放、重复调用和异常行为。`01_basic` 作为
-最小目录模板只保留三个正常调用，尚不代表完整的标量边界测试规范。
+最小目录模板只保留三个正常调用，不代表完整的标量边界测试规范。
 
-- [`01_basic`](01_basic/readme.md)：基础标量参数和返回值，第一版可运行黄金样例。
+- [`01_basic`](01_basic/readme.md)：基础标量参数和返回值，也是新案例的目录模板。
 - [`02_multi_return`](02_multi_return/readme.md)：多返回值，通过 C 结构体映射为固定长度 Python tuple。
 - [`03_str`](03_str/readme.md)：字符串转换、按值 BrString ABI 与内存释放。
 - [`04_bytes_and_holder`](04_bytes_and_holder/readme.md)：通用 Ref、地址句柄与 Go 生命周期，以字节切片为例。
@@ -117,7 +116,6 @@ pybind11 扩展完成，不使用 ctypes。公共工具只负责构建，不推�
 - [`13_array`](13_array/readme.md)：定长数组的值复制、变量视图和取址。
 - [`14_func`](14_func/readme.md)：持有、调用和传回 Go 函数值，保留闭包状态。
 - [`15_interface`](15_interface/readme.md)：GoInterface 公共基类、Go 接口方法调用、静态转换与动态断言，error 是普通接口值。
-- 后续：Python 实现 Go callback/interface 等。
 
-编号代表研究顺序。后续案例如暴露旧规则的问题，应先修正文档和黄金样例，再实现
-生成逻辑。当前公共构建约定可以随真实案例需要调整，不预先引入复杂的配置机制。
+编号代表研究顺序。新案例如果暴露出已有规则的问题，先修正文档和黄金样例，再改
+生成器。公共构建约定随真实案例需要调整，不预先引入复杂的配置机制。

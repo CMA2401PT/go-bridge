@@ -113,5 +113,4 @@ GOEXPERIMENT=cgocheck2 go test -race -gcflags=all=-d=checkptr=2 ./examples/04_by
 go vet ./examples/04_bytes_and_holder/expected/go
 ```
 
-未恢复的 Go panic 直接终止 Python 进程。error 映射和将 Go 数据地址直接交给外部
-长期读取留待后续案例。
+未恢复的 Go panic 直接终止 Python 进程。error 映射见 15_interface。

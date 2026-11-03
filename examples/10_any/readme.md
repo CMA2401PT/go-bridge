@@ -2,10 +2,10 @@
 
 本例定义 Go `any`／`interface{}` 如何映射为 Python API：显式装箱、按动态类型
 断言、nil interface 与带类型 nil、复制和共享，以及未知动态类型的持有与传回。
-这是手写行为样例，生成器已从生成产物验证本例协议，并另外验证 `*any`、`[]any` 组合。
+这是手写行为样例；生成器实现了同一协议，并支持 `*any`、`[]any` 组合。
 总体类型规则见 [`../types.md`](../types.md)。
 
-本例使用当前生成器的 `runtime/cgo.Handle`，不使用历史案例的地址句柄与 Pinner。
+与 04–09 的地址句柄和 Pinner 不同，本例与生成器一样使用 `runtime/cgo.Handle`。
 Go panic 不恢复，未恢复的 panic 终止整个 Python 进程。
 
 ```sh

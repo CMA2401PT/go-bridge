@@ -97,8 +97,8 @@ panic 不作为 C++ 异常跨语言展开，不能依赖 C++ 析构或 Python fi
 Go 内部整数运算溢出遵循 Go 语义，不会因上述输入检查而自动变成 OverflowError；
 例如 uint16 的 65535 加 1 得到 0。整数除零会 panic，并按上面的进程终止契约处理。
 
-`1309094` 将整数范围错误从 TypeError 修正为 OverflowError；与类型错误的区分现在由
-`integer_arg` / `integer_overflow` 实现，并由生成器集成测试验证。
+整数参数超出 Go 类型范围抛 OverflowError，类型不符抛 TypeError。二者由
+`integer_arg` / `integer_overflow` 区分，并由生成器集成测试验证。
 
 ## ABI 的稳定范围
 

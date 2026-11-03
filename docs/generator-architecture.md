@@ -74,7 +74,7 @@ Go 模型保留语言中的类型身份；Python 模型描述用户会看到的�
 
 生成项目仍依赖原始 Go 源码。`bridge.json.source_dir` 决定构建工作目录，让原 module、
 workspace 和 replace 规则继续生效；`package` 决定 Python 包名和库名。`import_path`
-目前仅记录来源，`build.py` 没有使用它重新解析目标包。
+仅记录来源，`build.py` 没有使用它重新解析目标包。
 
 构建步骤依次产生 Go 动态库和 cgo 头文件，再编译使用该头文件的 C++ 扩展，最后将
 扩展、动态库和 Python 文件放在 `.build/python/<包名>/`。构建过程直接更新 `.build`，
@@ -84,9 +84,10 @@ workspace 和 replace 规则继续生效；`package` 决定 Python 包名和库�
 等待 Go 包初始化完成。即使目标没有导出函数，这个入口也确保 cgo 生成头文件并维持
 对 Go 库的链接依赖。详见[初始化协议](generator-runtime.md#模块加载与-go-初始化)。
 
-## 当前边界与后续设计
+## 类型与对象的分工
 
-目前完整链路覆盖基础值、alias、Ref、slice、named、struct、方法与指针/typed nil、any 和 channel。
+完整链路覆盖 examples 01–15 的全部类型：基础值、alias、Ref、slice、named、struct、
+方法与指针/typed nil、any、channel、map、定长数组、函数值和一般 interface。
 Go/ABI/Python 的对象操作分工见[对象协议](generator-objects.md)。
 
 包装类放在 C++，通过 pybind11 暴露；命名标量在 C++ 模块初始化时创建内建类型子类。

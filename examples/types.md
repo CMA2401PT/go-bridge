@@ -5,7 +5,6 @@
 [实施计划](../docs/generator-plan.md)与[运行时协议](../docs/generator-runtime.md)。
 样例与生成器均不恢复 Go panic；未恢复的 panic（包括 nil 解引用）会终止整个
 Python 进程。
-10 使用当前句柄和 panic 协议验证 any 映射；生成器已支持本例及 `*any`、`[]any` 组合。
 
 ## Go 类型分类
 

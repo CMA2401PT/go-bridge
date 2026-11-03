@@ -1,8 +1,8 @@
 # 01–15 生成器验收
 
 验收对象是当前生成器产出的 Go、C++ 和 Python package，不编译手写 `expected/`。
-本轮环境为 macOS arm64、Go 1.27.1、CPython 3.13、pybind11 3.0.1。Linux 构建路径
-存在，但本轮没有 Linux 验收；free-threaded Python、子解释器与 wheel 分发不在范围内。
+验收环境为 macOS arm64、Go 1.27.1、CPython 3.13、pybind11 3.0.1。Linux 构建路径
+存在，但尚未在 Linux 上验收；free-threaded Python、子解释器与 wheel 分发不在范围内。
 
 ## 覆盖与证据
 
@@ -56,7 +56,7 @@ GO_BRIDGE_PYTHON=python GO_BRIDGE_MYPY=1 go test ./internal/... -count=1
 写的 recover 仍有效。Python 输入转换错误和 C++ 资源清理遵循
 [运行时契约](generator-runtime.md)。
 
-与历史样例的差异包括：整数越界为 OverflowError；struct
+与部分手写样例的差异包括：整数越界为 OverflowError；struct
 构造省略字段得到 Go 零值，显式 None 不替代零值；保留成员名加下划线；具体包装类
 禁止 Python 子类化。slice 不可隐式迭代，复制到 Python 要显式调用批量方法。
 
