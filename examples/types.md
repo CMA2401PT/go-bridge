@@ -234,12 +234,12 @@ Go 函数值成为可调用包装对象，例如 `FuncIntToInt`。调用释放 G
 命名函数类型可通过底层函数包装构造，unname 保留同一闭包。Python callable 不作为
 Go 函数传入。见 [14_func](14_func/readme.md)。
 
-## channel：同步回调接收
+## channel：`value, ok` 接收
 
 `chan T`、`chan<- T`、`<-chan T` 分别映射为 ChanT、SendChanT、RecvChanT。
 包装持有同一个 Go channel；nil 用 handle 0 表示，释放包装不关闭 channel。
-`recv(callback) -> bool` 接收一个值后同步调用 Python 函数，关闭且读空后返回 False。
-阻塞收发与原 Go API 调用释放 GIL，回调在调用线程持有 GIL 时执行。双向 channel
+`recv() -> tuple[T, bool]` 对应 Go 的 `v, ok := <-ch`，关闭且读空后返回 `(零值, False)`。
+阻塞收发与原 Go API 调用释放 GIL，后台收发由调用者用 Python 线程完成。双向 channel
 通过 send_only/recv_only 显式转换方向；单向类只提供方向允许的操作。
 具体语义、ABI、线程与关闭责任见 [11_channel](11_channel/readme.md)。
 

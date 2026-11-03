@@ -37,7 +37,9 @@ def check():
  assert b.SliceTransform([f])[0](3)==("text",4)
  assert b.MapStringTransform([("f",f)])["f"](4)==("text",5)
  assert b.Array1Transform([f])[0](5)==("text",6)
- ch=b.ChanTransform(1);ch.send(f);values=[];ch.recv(values.append);assert values[0](6)==("text",7)
+ ch=b.ChanTransform(capacity=1);ch.send(value=f);value,ok=ch.recv();assert ok and value(6)==("text",7)
+ ch.send(value=b.Transform.nil());ch.close();value,ok=ch.recv();assert ok and value.is_nil
+ value,ok=ch.recv();assert not ok and type(value) is b.Transform and value.is_nil
  assert b.Transform.from_any(f.as_any())(7)==("text",8)
  assert b.FuncIntToStringAndInt.try_from_any(f.as_any()) is None
  nil=b.Transform.nil();assert b.Transform.from_any(nil.as_any()).is_nil and not nil.as_any().is_nil
@@ -46,7 +48,7 @@ def check():
  assert b.factory()()(arg1=4)==4
  assert b.void()() is None
  done=b.ChanInt();signal=b.signal(done);thread=threading.Thread(target=signal);thread.start()
- received=[];assert done.recv(received.append);thread.join(timeout=3);assert not thread.is_alive() and received==[1]
+ assert done.recv()==(1,True);thread.join(timeout=3);assert not thread.is_alive()
  before=b._native._holder_count()
  for _ in range(3):
   try:b.invalid()()

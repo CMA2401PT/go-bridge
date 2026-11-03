@@ -33,16 +33,14 @@ func cppChannel(b *strings.Builder, c *abi.Channel) {
 	}
 	if c.Recv != "" {
 		// Allocate the owner before waiting. Once received, an element belongs
-		// to this call even if Python conversion or the callback raises.
-		fmt.Fprintf(b, `%s.def("recv", [=](py::handle self, py::function callback) {
+		// to this call even if Python conversion raises.
+		fmt.Fprintf(b, `%s.def("recv", [=](py::handle self) {
     auto handle = handle_arg<%s>(self);
     OwnedBuffer<%s, %s> owner(1);
     auto result = [&] { py::gil_scoped_release release; return %s(handle); }();
     owner.values[0] = result.value;
-    if (!result.ok) return false;
-    callback(%s);
-    return true;
-}, py::arg("callback"));
+    return py::make_tuple(%s, py::bool_(result.ok != 0));
+});
 `, cls, t.Cpp, c.Elem.C, cppDeleter(c.Elem), c.Recv, cppOutput(c.Elem, "owner.values[0]"))
 	}
 	for _, conversion := range []struct {

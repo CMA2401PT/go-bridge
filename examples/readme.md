@@ -112,7 +112,7 @@ pybind11 扩展完成，不使用 ctypes。公共工具只负责构建，不推�
 - [`08_multi_ptr`](08_multi_ptr/readme.md)：多级指针、命名指针，以及生成器必须补齐的依赖类型（类型闭包）。
 - [`09_nil`](09_nil/readme.md)：带类型的 nil、nil 接收者，以及未恢复的 Go panic 直接终止进程。
 - [`10_any`](10_any/readme.md)：显式 any 装箱、准确动态类型断言、try 的 `T | None`、复制与共享、nil interface 与带类型 nil，以及未知动态类型的持有。
-- [`11_channel`](11_channel/readme.md)：通过同步 Python 回调接收 channel，验证方向、阻塞收发、GIL 和关闭语义。
+- [`11_channel`](11_channel/readme.md)：channel 的 `value, ok` 接收、方向、阻塞收发、GIL、关闭语义，以及用 Python 线程在后台收发。
 - [`12_map`](12_map/readme.md)：Go map 的键比较、共享、nil、浅复制和批量读取。
 - [`13_array`](13_array/readme.md)：定长数组的值复制、变量视图和取址。
 - [`14_func`](14_func/readme.md)：持有、调用和传回 Go 函数值，保留闭包状态。

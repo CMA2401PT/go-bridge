@@ -23,19 +23,16 @@ class ChannelTests(unittest.TestCase):
         gc.collect()
         self.assertEqual(int(_native._holder_count()), self.baseline)
 
-    def test_go_producer_and_callback_thread(self) -> None:
+    def test_go_producer(self) -> None:
         values: list[int] = []
-        caller = threading.get_ident()
-
-        def received(value: int) -> None:
-            self.assertEqual(threading.get_ident(), caller)
-            values.append(value)
-
         ch = bridge.numbers(count=4)
-        while ch.recv(callback=received):
-            pass
+        while True:
+            value, ok = ch.recv()
+            if not ok:
+                break
+            values.append(value)
         self.assertEqual(values, [0, 1, 2, 3])
-        self.assertFalse(ch.recv(callback=received))
+        self.assertEqual(ch.recv(), (0, False))
         self.assertFalse(hasattr(ch, "send"))
         self.assertFalse(hasattr(ch, "close"))
 
@@ -56,12 +53,16 @@ class ChannelTests(unittest.TestCase):
 
     def test_python_receive_releases_gil(self) -> None:
         ch = bridge.ChanInt()
-        values: list[int] = []
-        worker = threading.Thread(target=lambda: ch.recv(callback=values.append))
+        results: list[tuple[int, bool]] = []
+
+        def receive() -> None:
+            results.append(ch.recv())
+
+        worker = threading.Thread(target=receive)
         worker.start()
         ch.send(value=7)
         worker.join(timeout=5)
-        self.assertEqual(values, [7])
+        self.assertEqual(results, [(7, True)])
         self.assertFalse(worker.is_alive())
 
     def test_buffered_alias_and_nil(self) -> None:
@@ -70,43 +71,23 @@ class ChannelTests(unittest.TestCase):
         alias.send(value=0)
         alias.send(value=9)
         ch.close()
-        values: list[int] = []
-        while alias.recv(callback=values.append):
-            pass
-        self.assertEqual(values, [0, 9])
+        self.assertEqual(alias.recv(), (0, True))
+        self.assertEqual(alias.recv(), (9, True))
+        self.assertEqual(alias.recv(), (0, False))
+        self.assertEqual(alias.recv(), (0, False))
         self.assertTrue(bridge.echo(ch=bridge.ChanInt.nil()).is_nil)
         self.assertTrue(bridge.ChanInt.nil().recv_only().is_nil)
         self.assertTrue(bridge.ChanInt.nil().send_only().is_nil)
 
-    def test_callback_exception_consumes_only_one_value(self) -> None:
+    def test_string_transfer_and_closed_zero(self) -> None:
         ch = bridge.ChanString(capacity=2)
         ch.send(value="中文\0🙂")
-        ch.send(value="next")
+        ch.send(value="")
         ch.close()
-
-        def fail(value: str) -> None:
-            self.assertEqual(value, "中文\0🙂")
-            raise ValueError("callback failed")
-
-        with self.assertRaisesRegex(ValueError, "callback failed"):
-            ch.recv(callback=fail)
-        values: list[str] = []
-        self.assertTrue(bridge.echo_text(ch=ch).recv(callback=values.append))
-        self.assertEqual(values, ["next"])
-        self.assertFalse(ch.recv(callback=values.append))
-
-    def test_reentrant_callback(self) -> None:
-        ch = bridge.ChanInt(capacity=1)
-        ch.send(value=1)
-
-        def received(value: int) -> None:
-            ch.send(value=value + 1)
-
-        self.assertTrue(ch.recv(callback=received))
-        values: list[int] = []
-        self.assertTrue(ch.recv(callback=values.append))
-        self.assertEqual(values, [2])
-        ch.close()
+        self.assertEqual(bridge.echo_text(ch=ch).recv(), ("中文\0🙂", True))
+        self.assertEqual(ch.recv(), ("", True))
+        self.assertEqual(ch.recv(), ("", False))
+        self.assertEqual(ch.recv(), ("", False))
 
 
 if __name__ == "__main__":

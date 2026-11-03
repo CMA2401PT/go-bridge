@@ -156,7 +156,7 @@ Type.Go 明确调用原 API 时的类型。新资源类型须先定义其所有�
 这份计划。它与包级函数 Operation 分工不同，不将缓冲区操作伪装成目标包函数。
 
 `abi.Channel` 独立规划构造、收发、关闭和方向转换。接收返回 ok 与元素值，
-Python callback 留在 C++，不作为 ABI 参数。详见 [channel 协议](generator-channel.md)。
+关闭读空时元素值是 Go 零值。详见 [channel 协议](generator-channel.md)。
 
 `pyapi.AnyConversion` 保存转换类型及公开名字，`abi.AnyConversion` 保存装箱、
 断言符号和带 ok 字段的结果结构。普通和 try 断言共用一个 ABI 操作，转换不计入

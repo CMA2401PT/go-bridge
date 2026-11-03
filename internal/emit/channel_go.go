@@ -21,7 +21,7 @@ func goChannel(b *strings.Builder, c *abi.Channel) {
 	}
 	if c.Recv != "" {
 		goExport(b, c.Recv, "handle C.uintptr_t", c.Result)
-		fmt.Fprintf(b, "channel := %s\nvalue, ok := <-channel\nif !ok { return }\nout.ok = 1\n", goInput(t, "handle"))
+		fmt.Fprintf(b, "channel := %s\nvalue, ok := <-channel\nif ok { out.ok = 1 }\n", goInput(t, "handle"))
 		goOutput(b, c.Elem, "out.value", "value")
 		b.WriteString("return\n}\n")
 	}

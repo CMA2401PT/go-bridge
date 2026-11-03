@@ -72,7 +72,9 @@ def check():
  assert b.SliceReader([reader])[0].read()==7
  m=b.MapReaderReader([(reader,reader)]);assert m[b.Reader.from_any(b.Value(n=7).as_any())].read()==7
  assert b.Array1Reader([reader])[0].read()==7
- ch=b.ChanReader(1);ch.send(reader);values=[];ch.recv(values.append);assert values[0].read()==7
+ ch=b.ChanReader(capacity=1);ch.send(value=reader);value,ok=ch.recv();assert ok and value.read()==7
+ ch.send(value=b.Reader.nil());ch.close();value,ok=ch.recv();assert ok and value.is_nil
+ value,ok=ch.recv();assert not ok and type(value) is b.Reader and value.is_nil
  assert b.function(reader)().read()==7
  nil=b.Reader.nil();assert nil.as_any().is_nil
  assert b.Reader(b.ReadWriter.nil()).is_nil

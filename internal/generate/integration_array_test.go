@@ -39,7 +39,8 @@ def check():
  listed=arr.copy_to_py_list();listed[0].n=8;assert arr[0].n==5
  m=b.MapAA([(a,a)]);a[0]=1;key=b.A(b.Array2Int([9,2]));assert m[key][0]==9
  m[key][0]=99;assert m[key][0]==9
- ch=b.ChanA(1);ch.send(a);a[0]=2;values=[];ch.recv(values.append);assert values[0][0]==1
+ ch=b.ChanA(capacity=1);ch.send(value=a);a[0]=2;value,ok=ch.recv();assert ok and value[0]==1
+ ch.close();value,ok=ch.recv();assert not ok and type(value) is b.A and value[0]==value[1]==0
  boxed=a.as_any();a[0]=3;assert b.A.from_any(boxed)[0]==2
  assert len(b.empty(b.Array0Int()))==0
  refs=b.Array2SliceInt([b.SliceInt([1]),b.SliceInt([2])]);copy.copy(refs)[0][0]=3;assert refs[0][0]==3

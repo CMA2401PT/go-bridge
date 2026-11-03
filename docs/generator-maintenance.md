@@ -71,7 +71,7 @@ named bool 的接口仍未定义；不要为完成代码而随意决定其 Pytho
 对象原生测试分在 `integration_slice_test.go`、`integration_object_test.go` 和
 `integration_pointer_test.go`，覆盖 04–09、句柄计数、GC、视图/复制/共享、多级重定向、
 Go 环、nil 接收者和 nil 解引用的致命子进程。每个生成包的声明文件也执行 mypy strict。
-`integration_channel_test.go` 验证例子 11、方向限制、阻塞/GIL、回调行为、对象组合与关闭 panic。
+`integration_channel_test.go` 验证例子 11、方向限制、阻塞/GIL、关闭后的零值、对象组合与关闭 panic。
 `integration_any_test.go` 验证例子 10、any 字段、pointer/slice 组合、命名类型、
 未知动态值、失败清理、消费者类型收窄与 any holder 的并发释放。
 

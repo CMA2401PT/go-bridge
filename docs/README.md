@@ -12,7 +12,7 @@
 | [对象、句柄与类型操作](generator-objects.md) | Ref 如何管理资源，named/struct/slice/pointer 怎样映射？ |
 | [any 装箱与断言](generator-any.md) | GoAny 如何持有动态值，显式转换及 pointer/slice 组合怎样生成？ |
 | [接口包装与转换](generator-interface.md) | interface 返回什么对象，静态转换和动态断言有什么区别？ |
-| [channel 与回调](generator-channel.md) | channel 如何收发、限制方向，并在等待期间释放 GIL？ |
+| [channel 与 GIL](generator-channel.md) | channel 如何收发、限制方向，并在等待期间释放 GIL？ |
 | [ABI、所有权与异常](generator-runtime.md) | 数据如何过边界，字符串由谁释放，panic 和转换错误怎样传播？ |
 | [扩展、验证与排障](generator-maintenance.md) | 添加能力该改哪些地方，哪些测试能证明什么，失败时从哪里查？ |
 | [01–15 验收](generator-acceptance.md) | 哪些行为已经实测，怎样复现，哪些环境仍未验证？ |
@@ -31,7 +31,7 @@ any/interface{} 映射为 GoAny，支持显式装箱／断言、any 字段、`*a
 以及未知动态类型的持有和传回。一般 interface 支持 Go 方法调用、静态转换和动态断言，
 共用 GoInterface 基类，error 是普通接口值。
 Go 函数值支持持有、调用和传回 Go，包括命名类型和闭包状态。
-channel 支持三种方向、命名类型与同步接收回调，及其与既有对象类型的组合。
+channel 支持三种方向、命名类型与 `value, ok` 形式的接收，及其与既有对象类型的组合。
 
 “类型闭包中有这个节点”与“可以为这个类型生成可运行绑定”是两个不同的验收条件。
 

@@ -15,7 +15,7 @@
 | 08 | 多级指针、重定向、named pointer 转换与解引用 | integration_pointer_test.go |
 | 09 | typed nil、nil 接收者方法、Go 环、致命 panic 与 nil 解引用 | integration_pointer_test.go |
 | 10 | 全部基础转换、命名类型断言、复制／共享、typed nil、未知值、失败清理 | integration_any_test.go |
-| 11 / channel 组合 | 三种方向、阻塞/GIL、回调线程/异常/重入、命名与递归、字段/指针/slice/any、关闭 panic | integration_channel_test.go |
+| 11 / channel 组合 | 三种方向、阻塞/GIL、关闭后的零值与 ok、命名与递归、字段/指针/slice/any、关闭 panic | integration_channel_test.go |
 | 12 / map 组合 | Go 键比较、struct 复制、引用共享、命名/递归、nil 写入 panic、批量清理 | integration_map_test.go |
 | 13 / array 组合 | 定长/零长构造、值复制、变量视图、取址、命名数组与容器组合 | integration_array_test.go |
 | 14 / func 组合 | 闭包共享、命名/递归、多返回值、GIL、nil 调用 panic 和结果清理 | integration_func_test.go |

@@ -48,8 +48,8 @@ func BrIntRecv(h C.uintptr_t) (out C.BrIntResult) {
 	value, ok := <-bridgePointer[chan int](h)
 	if ok {
 		out.ok = 1
-		out.value = C.intptr_t(value)
 	}
+	out.value = C.intptr_t(value)
 	return
 }
 
@@ -58,8 +58,8 @@ func BrRecvIntRecv(h C.uintptr_t) (out C.BrIntResult) {
 	value, ok := <-bridgePointer[<-chan int](h)
 	if ok {
 		out.ok = 1
-		out.value = C.intptr_t(value)
 	}
+	out.value = C.intptr_t(value)
 	return
 }
 
@@ -83,8 +83,8 @@ func BrTextRecv(h C.uintptr_t) (out C.BrTextResult) {
 	value, ok := <-bridgePointer[chan string](h)
 	if ok {
 		out.ok = 1
-		out.value = C.BrString{data: C.CString(value), size: C.size_t(len(value))}
 	}
+	out.value = C.BrString{data: C.CString(value), size: C.size_t(len(value))}
 	return
 }
 

@@ -79,7 +79,9 @@ def check():
  entries=m.copy_to_py_items();assert len(entries)==1 and entries[0][0].n==1
  entries[0][0].n=10;assert key in m
  sl=b.SliceTable([m]);sl[0].delete(key);assert len(m)==0
- ch=b.ChanTable(1);ch.send(m);items=[];ch.recv(items.append);items[0][key]=v;assert len(m)==1
+ ch=b.ChanTable(capacity=1);ch.send(value=m);item,ok=ch.recv();assert ok;item[key]=v;assert len(m)==1
+ ch.send(value=b.Table.nil());ch.close();item,ok=ch.recv();assert ok and item.is_nil
+ item,ok=ch.recv();assert not ok and type(item) is b.Table and item.is_nil
  pointers=b.MapPtrKeyInt([(k.addr(),4)])
  assert pointers[k.addr()]==4 and k.addr() in pointers
  dynamic=b.MapGoAnyInt([(key.as_any(),7)])

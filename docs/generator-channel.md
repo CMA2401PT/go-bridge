@@ -1,14 +1,13 @@
-# channel、回调与 GIL
+# channel 与 GIL
 
-Go channel 通过 Ref 包装在 Python 中共享。send(value) 发送一个值，recv(callback)
-等待一个值后在调用线程执行 Python 函数，并返回 True。关闭且缓冲区读空后，recv
-返回 False，不调用回调。这个接口用回调交付数据，用 bool 单独表达接收是否成功，
-因此零值和 nil 元素都可以作为正常数据传递。
+Go channel 通过 Ref 包装在 Python 中共享。send(value) 发送一个值；recv() 对应 Go 的
+`v, ok := <-ch`，返回 `(值, ok)`。关闭且缓冲区读空后返回 `(零值, False)`。零值和
+nil 元素都可能是正常数据，所以是否结束只由 ok 表达。
 
 等待 channel 时必须让其他 Python 线程继续运行，否则无缓冲收发可能相互等待 GIL。
-C++ 在进入 Go 收发前释放 GIL，Go 返回后重新获取 GIL，再转换值和调用回调。
-原 Go 函数和方法同样可能阻塞，所以它们的 ABI 调用也释放 GIL。Go 从不保存 Python
-回调；回调可以重入桥接代码，异常原样传播，已收到的元素不会退回 channel。
+C++ 在进入 Go 收发前释放 GIL，Go 返回后重新获取 GIL，再转换值。
+原 Go 函数和方法同样可能阻塞，所以它们的 ABI 调用也释放 GIL。Go 从不调用 Python；
+后台收发由调用者用自己的 Python 线程循环 recv/send 完成。
 
 ## Python 类型与 Go 语义
 
@@ -40,13 +39,13 @@ channel 成员名参加统一的保留名处理，Go 的 Send 方法因此成为
 [abi.Channel](../internal/abi/channel.go)规划独立的构造、发送、接收、关闭和转换符号。
 channel 值使用 uintptr_t 句柄，nil 是 0。非 nil holder 保存准确的底层 Go channel
 类型，命名类型在调用或 any 装箱前恢复名字。方向转换生成独立句柄，引用同一 channel。
-接收返回 `{ok, value}`；ok 为 False 时 value 不拥有资源，且不会转换为 Python 对象。
+接收返回 `{ok, value}`；ok 为 False 时 value 是 Go 零值，和普通元素一样转换、释放。
 
 [Go 输出](../internal/emit/channel_go.go)执行 make、收发、close 和方向转换，并复用
 通用 goInput/goOutput。[C++ 输出](../internal/emit/channel_cpp.go)先建立结果 owner，
-再释放 GIL 等待，重新取得 GIL 后转换元素并调用 Python 函数。字符串和句柄沿用既有
-释放协议，解码失败或回调异常不会泄漏传输资源。
-[声明输出](../internal/emit/channel_python.go)提供 Callable[[T], None] 与准确的方向成员。
+再释放 GIL 等待，重新取得 GIL 后转换元素并返回 tuple。字符串和句柄沿用既有
+释放协议，解码失败不会泄漏传输资源。
+[声明输出](../internal/emit/channel_python.go)提供 `tuple[T, bool]` 与准确的方向成员。
 
 ## 使用与验证
 
@@ -59,8 +58,11 @@ PYTHONPATH=generated/channel/.build/python python - <<'PYTHON'
 import go_channel as bridge
 values = []
 ch = bridge.numbers(count=3)
-while ch.recv(callback=values.append):
-    pass
+while True:
+    value, ok = ch.recv()
+    if not ok:
+        break
+    values.append(value)
 print(values)
 PYTHON
 ```

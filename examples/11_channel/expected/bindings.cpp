@@ -77,8 +77,7 @@ struct SendChanInt : Ref { using Ref::Ref; };
 struct RecvChanInt : Ref { using Ref::Ref; };
 struct ChanString : Ref { using Ref::Ref; };
 
-// Only the ABI call runs without the GIL. Python conversion and callbacks
-// execute on the caller's thread with the GIL held.
+// Only the ABI call runs without the GIL. Python conversion runs with it held.
 template<typename F> auto go_call(F call) {
     py::gil_scoped_release release;
     return call();
@@ -88,11 +87,9 @@ template<typename T> void nil_members(py::class_<T, Ref>& cls) {
        .def_property_readonly("is_nil", [](const T& self) { return self.handle == 0; })
        .def("__bool__", [](const T&) -> bool { throw py::type_error("use is_nil"); });
 }
-template<typename T, auto Receive> bool recv_int(const T& self, py::function callback) {
+template<typename T, auto Receive> py::tuple recv_int(const T& self) {
     auto result = go_call([&] { return Receive(self.handle); });
-    if (!result.ok) return false;
-    callback(py::int_(result.value));
-    return true;
+    return py::make_tuple(py::int_(result.value), py::bool_(result.ok != 0));
 }
 template<typename T, auto Send> void send_int(const T& self, py::handle value) {
     auto input = integer_arg<intptr_t>(value);
@@ -108,26 +105,24 @@ PYBIND11_MODULE(_native, m) {
     nil_members(both); nil_members(send); nil_members(recv); nil_members(text);
     both.def(py::init([](py::handle capacity) { return ChanInt(BrIntNew(integer_arg<intptr_t>(capacity))); }), py::arg("capacity") = 0)
         .def("send", &send_int<ChanInt, BrIntSend>, py::arg("value"))
-        .def("recv", &recv_int<ChanInt, BrIntRecv>, py::arg("callback"))
+        .def("recv", &recv_int<ChanInt, BrIntRecv>)
         .def("close", [](const ChanInt& self) { BrIntClose(self.handle); })
         .def("send_only", [](const ChanInt& self) { return SendChanInt(BrIntSendOnly(self.handle)); })
         .def("recv_only", [](const ChanInt& self) { return RecvChanInt(BrIntRecvOnly(self.handle)); });
     send.def("send", &send_int<SendChanInt, BrSendIntSend>, py::arg("value"))
         .def("close", [](const SendChanInt& self) { BrSendIntClose(self.handle); });
-    recv.def("recv", &recv_int<RecvChanInt, BrRecvIntRecv>, py::arg("callback"));
+    recv.def("recv", &recv_int<RecvChanInt, BrRecvIntRecv>);
     text.def(py::init([](py::handle capacity) { return ChanString(BrTextNew(integer_arg<intptr_t>(capacity))); }), py::arg("capacity") = 0)
         .def("send", [](const ChanString& self, py::handle value) {
             auto input = string_arg(value);
             go_call([&] { BrTextSend(self.handle, input); });
         }, py::arg("value"))
-        .def("recv", [](const ChanString& self, py::function callback) {
+        .def("recv", [](const ChanString& self) {
             auto result = go_call([&] { return BrTextRecv(self.handle); });
-            // Own the received string even when decoding or the callback fails.
+            // Own the received string even when decoding fails.
             struct Owner { BrString value; ~Owner() { std::free(value.data); } } owner{result.value};
-            if (!result.ok) return false;
-            callback(decode(result.value));
-            return true;
-        }, py::arg("callback"))
+            return py::make_tuple(decode(owner.value), py::bool_(result.ok != 0));
+        })
         .def("close", [](const ChanString& self) { BrTextClose(self.handle); });
     m.def("numbers", [](py::handle count) { return RecvChanInt(BrNumbers(integer_arg<intptr_t>(count))); }, py::arg("count"));
     m.def("sum", [](const RecvChanInt& ch) { return go_call([&] { return BrSum(ch.handle); }); }, py::arg("ch"));

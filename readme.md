@@ -184,7 +184,7 @@ Go 代码里的 nil 指针解引用、越界访问都属于这一类，调用前
 | 指针、多级指针、命名指针 | `PtrT` | [07](examples/07_ptr_basic/readme.md)、[08](examples/08_multi_ptr/readme.md) |
 | typed nil | `.nil()` / `.is_nil` | [09](examples/09_nil/readme.md) |
 | `any` / `interface{}` | `GoAny` | [10](examples/10_any/readme.md) |
-| channel（三种方向） | `ChanT`，用 Python 回调接收 | [11](examples/11_channel/readme.md) |
+| channel（三种方向） | `ChanT`，`value, ok = ch.recv()` | [11](examples/11_channel/readme.md) |
 | map | `MapKV`，由 Go 比较键 | [12](examples/12_map/readme.md) |
 | 定长数组 | `ArrayNT`，值语义 | [13](examples/13_array/readme.md) |
 | 函数值、闭包 | 可调用对象 | [14](examples/14_func/readme.md) |

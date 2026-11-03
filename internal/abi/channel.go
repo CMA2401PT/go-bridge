@@ -7,7 +7,7 @@ import (
 )
 
 // Channel uses owned handles for channel values and an owned element plus ok
-// for receive. The callback stays in C++; it never crosses the C ABI.
+// for receive, including the Go zero value after the channel is drained.
 type Channel struct {
 	Type, Elem, SendType, RecvType *Type
 	New, Send, Recv, Close, Result string

@@ -65,30 +65,26 @@ func InvalidText() <-chan string {
 	script := `
 import gc
 import threading
-from typing import assert_type
 import go_channel_composition as b
 
 def check() -> None:
     ch = b.ChanInt(capacity=2)
     p = b.PtrChanInt(ch)
     b.echo_pointer(value=p).value.send(value=1)
-    values: list[int] = []
-    b.echo_slice(value=b.SliceChanInt([ch]))[0].recv(callback=values.append)
-    assert values == [1]
+    assert b.echo_slice(value=b.SliceChanInt([ch]))[0].recv() == (1, True)
     nil = b.ChanInt.nil()
     assert b.ChanInt.from_any(nil.as_any()).is_nil
     assert not nil.as_any().is_nil
     assert b.RecvChanInt.try_from_any(ch.as_any()) is None
     b.ChanInt.from_any(ch.as_any()).send(value=3)
-    assert ch.recv(callback=values.append) and values == [1, 3]
+    assert ch.recv() == (3, True)
     stream = b.Stream(b.ChanCount(capacity=1))
     assert stream.send_() == 42
     stream.send(value=b.Count(8))
-    counts: list[b.Count] = []
-    assert b.Reader(stream.recv_only()).recv(callback=counts.append)
-    assert type(counts[0]) is b.Count and counts == [8]
+    count, ok = b.Reader(stream.recv_only()).recv()
+    assert ok and type(count) is b.Count and count == 8
     b.Writer(stream.send_only()).send(value=b.Count(9))
-    assert stream.unname().recv(callback=counts.append)
+    assert stream.unname().recv() == (9, True)
     assert b.Stream.try_from_any(stream.unname().as_any()) is None
     assert b.Stream.from_any(stream.as_any()).recv_only().is_nil is False
     assert b.Reader.nil().unname().is_nil
@@ -107,64 +103,79 @@ def check() -> None:
     objects = b.ChanBox(capacity=1)
     objects.send(value=box)
     box.n = 6
-    boxes: list[b.Box] = []
-    assert b.echo_struct(value=objects).recv(callback=boxes.append)
-    assert boxes[0].n == 5  # Send and receive copy struct values.
+    received_box, ok = b.echo_struct(value=objects).recv()
+    assert ok and received_box.n == 5  # Send and receive copy struct values.
+    objects.close()
+    zero_box, ok = objects.recv()
+    assert not ok and type(zero_box) is b.Box
+    assert zero_box.n == 0 and zero_box.stream.is_nil
     pointers = b.ChanPtrBox(capacity=1)
     pointers.send(value=box.addr())
-    refs: list[b.PtrBox] = []
-    pointers.recv(callback=refs.append)
-    refs[0].n = 7
+    ref, ok = pointers.recv()
+    assert ok
+    ref.n = 7
     assert box.n == 7
+    pointers.send(value=b.PtrBox.nil())
+    pointers.close()
+    ref, ok = pointers.recv()
+    assert ok and ref.is_nil
+    ref, ok = pointers.recv()
+    assert not ok and type(ref) is b.PtrBox and ref.is_nil
     slices = b.ChanSliceInt(capacity=1)
     original = b.SliceInt([1])
     slices.send(value=original)
-    received_slices: list[b.SliceInt] = []
-    slices.recv(callback=received_slices.append)
-    received_slices[0][0] = 2
+    received_slice, ok = slices.recv()
+    assert ok
+    received_slice[0] = 2
     assert original[0] == 2
+    slices.close()
+    zero_slice, ok = slices.recv()
+    assert not ok and type(zero_slice) is b.SliceInt and len(zero_slice) == 0
     interfaces = b.ChanGoAny(capacity=1)
     interfaces.send(value=b.GoAny.nil())
-    anys: list[b.GoAny] = []
-    assert interfaces.recv(callback=anys.append) and anys[0].is_nil
+    any_value, ok = interfaces.recv()
+    assert ok and any_value.is_nil
     interfaces.close()
-    assert not interfaces.recv(callback=anys.append)
+    any_value, ok = interfaces.recv()
+    assert not ok and type(any_value) is b.GoAny and any_value.is_nil
     recursive = b.Recursive(b.ChanRecursive(capacity=1))
     recursive.send(value=recursive)
-    recs: list[b.Recursive] = []
-    recursive.recv(callback=recs.append)
-    recs[0].close()
-    assert not recursive.recv(callback=recs.append)
+    rec, ok = recursive.recv()
+    assert ok
+    rec.send(value=b.Recursive.nil())
+    rec.close()
+    rec, ok = recursive.recv()
+    assert ok and rec.is_nil
+    rec, ok = recursive.recv()
+    assert not ok and type(rec) is b.Recursive and rec.is_nil
     flags = b.ChanBool(capacity=1)
     flags.send(value=False)
-    bools: list[bool] = []
-    assert flags.recv(callback=bools.append) and bools == [False]
+    assert flags.recv() == (False, True)
+    flags.close()
+    assert flags.recv() == (False, False)
     floats = b.ChanFloat32(capacity=1)
     floats.send(value=1.25)
-    numbers: list[float] = []
-    assert floats.recv(callback=numbers.append) and numbers == [1.25]
-    # Received handles are released even when a callback raises.
-    def fail(value: b.Box) -> None:
-        raise ValueError("callback")
-    before = b._native._holder_count()
-    objects.send(value=box)
-    try:
-        objects.recv(callback=fail)
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("callback exception lost")
-    assert b._native._holder_count() == before
+    assert floats.recv() == (1.25, True)
+    floats.send(value=0.0)
+    floats.close()
+    assert floats.recv() == (0.0, True)
+    assert floats.recv() == (0.0, False)
+    stream.send(value=b.Count(0))
+    stream.close()
+    count, ok = stream.recv()
+    assert ok and type(count) is b.Count and count == 0
+    count, ok = stream.recv()
+    assert not ok and type(count) is b.Count and count == 0
     invalid = b.invalid_text()
     try:
-        invalid.recv(callback=lambda value: None)
+        invalid.recv()
     except UnicodeDecodeError:
         pass
     else:
         raise AssertionError("invalid UTF-8 accepted")
-    assert not invalid.recv(callback=lambda value: None)
-    # Wrong directions, elements, and callback types fail before receiving.
-    for call in [lambda: b.echo(ch=ch.recv_only()), lambda: ch.send(value="bad"), lambda: ch.recv(callback=None)]:
+    assert invalid.recv() == ("", False)
+    # Wrong directions and elements fail before receiving.
+    for call in [lambda: b.echo(ch=ch.recv_only()), lambda: ch.send(value="bad")]:
         try:
             call()
         except TypeError:
@@ -203,16 +214,19 @@ assert b._native._holder_count() == base
 		consumer := filepath.Join(out, "consumer.py")
 		write(t, consumer, `from typing import assert_type
 import go_channel_composition as b
-values: list[int] = []
 c = b.ChanInt(capacity=1)
-assert_type(c.recv(callback=values.append), bool)
+assert_type(c.recv(), tuple[int, bool])
+assert_type(c.recv_only().recv(), tuple[int, bool])
+assert_type(b.Stream(b.ChanCount()).recv(), tuple[b.Count, bool])
+assert_type(b.ChanBox().recv(), tuple[b.Box, bool])
+assert_type(b.ChanPtrBox().recv(), tuple[b.PtrBox, bool])
+assert_type(b.ChanString().recv(), tuple[str, bool])
 assert_type(c.send_only(), b.SendChanInt)
 assert_type(c.recv_only(), b.RecvChanInt)
 assert_type(b.Stream(b.ChanCount()).unname(), b.ChanCount)
 assert_type(b.Box().stream, b.Stream)
 c.recv_only().send(1)  # type: ignore[attr-defined]
-c.send_only().recv(values.append)  # type: ignore[attr-defined]
-c.recv(callback=lambda: None)  # type: ignore[arg-type,misc]
+c.send_only().recv()  # type: ignore[attr-defined]
 b.echo(ch=c.recv_only())  # type: ignore[arg-type]
 `)
 		cmd := exec.Command(python, "-m", "mypy", "--strict", consumer)
